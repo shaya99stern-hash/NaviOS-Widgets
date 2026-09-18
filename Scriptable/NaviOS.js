@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -884,6 +884,25 @@ async function handleAction(data) {
   const q = args.queryParameters || {};
   const action = q.action || "open";
   const list = normalizeList(q.list);
+
+  if (action === "configure") {
+    const next = {
+      type: normalizeType(q.type),
+      list: normalizeList(q.list),
+      themeName: normalizeTheme(q.theme)
+    };
+    saveWidgetConfig(next);
+
+    const saved = new Alert();
+    saved.title = "NaviOS Widget Updated";
+    saved.message =
+      next.type[0].toUpperCase() + next.type.slice(1) +
+      " · " + listTitle(next.list) +
+      " · " + THEMES[next.themeName].name;
+    saved.addAction("Done");
+    await saved.present();
+    return { list: next.list, reopen: false };
+  }
 
   if (action === "toggle" && q.id) {
     await toggleTask(data, q.id);
