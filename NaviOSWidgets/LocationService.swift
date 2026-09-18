@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import Combine
 
 @MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
