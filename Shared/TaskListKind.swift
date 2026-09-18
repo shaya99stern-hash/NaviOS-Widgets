@@ -14,10 +14,12 @@ enum TaskListKind: String, Codable, CaseIterable, Identifiable, AppEnum {
         }
     }
 
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "List"
+    nonisolated static var typeDisplayRepresentation: TypeDisplayRepresentation { "List" }
 
-    static var caseDisplayRepresentations: [TaskListKind: DisplayRepresentation] = [
-        .personal: "Personal",
-        .business: "Business"
-    ]
+    nonisolated static var caseDisplayRepresentations: [TaskListKind: DisplayRepresentation] {
+        [
+            .personal: "Personal",
+            .business: "Business"
+        ]
+    }
 }
