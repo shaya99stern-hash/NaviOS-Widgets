@@ -1,22 +1,8 @@
-// NaviOS — Scriptable-first widget
-// Real iOS Home Screen widget hosted by Scriptable.
-// No server. No Vercel. Tasks are stored locally on-device.
+// NaviOS Widgets — Scriptable Theme Suite
+// Real iOS Home Screen widgets hosted by Scriptable.
+// No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "1.0.0";
-const SCRIPT_NAME = Script.name();
-
-const COLORS = {
-  bg: new Color("#050506"),
-  panel: new Color("#0B0B0D"),
-  text: new Color("#F2F0EB"),
-  secondary: new Color("#8E8B86"),
-  faint: new Color("#444247"),
-  dividerA: new Color("#817B73", 0.42),
-  dividerB: new Color("#817B73", 0.02),
-  personal: new Color("#B8B1A8"),
-  business: new Color("#A9ADB8"),
-};
-
+const VERSION = "2.0.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -25,9 +11,75 @@ if (!fm.fileExists(root)) fm.createDirectory(root, true);
 const nowISO = () => new Date().toISOString();
 const uid = () => String(Date.now()) + "-" + String(Math.floor(Math.random() * 100000));
 
+const THEMES = {
+  graphite: {
+    name: "Graphite Minimal",
+    bg: "#050506", panel: "#0D0D0F", panel2: "#151518",
+    text: "#F1EFEA", secondary: "#8E8B86", faint: "#454348",
+    accent: "#B9B3AA", line: "#6E6963",
+    serif: true, radius: 16, mark: "◆"
+  },
+  editorial: {
+    name: "Matte Editorial",
+    bg: "#090909", panel: "#111111", panel2: "#191919",
+    text: "#F0EEE8", secondary: "#98948C", faint: "#4A4844",
+    accent: "#CDC6BA", line: "#5E5A53",
+    serif: true, radius: 8, mark: "·"
+  },
+  noir: {
+    name: "Dashboard Noir",
+    bg: "#030304", panel: "#101013", panel2: "#17171B",
+    text: "#F5F5F2", secondary: "#92939A", faint: "#414149",
+    accent: "#B8BAC2", line: "#52535B",
+    serif: false, radius: 15, mark: "◼"
+  },
+  glass: {
+    name: "Monochrome Glass",
+    bg: "#08090B", panel: "#15171A", panel2: "#1C1F23",
+    text: "#F3F4F2", secondary: "#9A9DA1", faint: "#4B4F54",
+    accent: "#C0C3C7", line: "#676B70",
+    serif: false, radius: 19, mark: "◌"
+  },
+  stone: {
+    name: "Soft Stone",
+    bg: "#0A0908", panel: "#151311", panel2: "#1E1B18",
+    text: "#EEEAE2", secondary: "#A19A8F", faint: "#514C45",
+    accent: "#C5BCAF", line: "#72695F",
+    serif: true, radius: 17, mark: "◇"
+  },
+  luxe: {
+    name: "Luxe Panel",
+    bg: "#050505", panel: "#121212", panel2: "#1B1B1B",
+    text: "#F6F3ED", secondary: "#96918A", faint: "#44413D",
+    accent: "#D0C7BA", line: "#6B645C",
+    serif: true, radius: 11, mark: "■"
+  }
+};
+
+const TYPES = ["tasks", "clock", "agenda", "dashboard"];
+
+function C(hex, alpha) {
+  return new Color(hex, alpha == null ? 1 : alpha);
+}
+
+function theme(name) {
+  return THEMES[name] || THEMES.graphite;
+}
+
+function serifFont(size) {
+  return new Font("Georgia", size);
+}
+
+function displayFont(t, size, weight) {
+  if (t.serif) return serifFont(size);
+  if (weight === "bold") return Font.boldSystemFont(size);
+  if (weight === "semibold") return Font.semiboldSystemFont(size);
+  return Font.regularSystemFont(size);
+}
+
 function defaultData() {
   return {
-    version: 1,
+    version: 2,
     updatedAt: nowISO(),
     tasks: [
       { id: uid(), list: "personal", title: "Relax", completed: false, due: null, createdAt: nowISO() },
@@ -45,13 +97,12 @@ function loadData() {
     return seed;
   }
   try {
-    const raw = fm.readString(dataPath);
-    const parsed = JSON.parse(raw);
-    if (!parsed.tasks || !Array.isArray(parsed.tasks)) throw new Error("Invalid task file");
+    const parsed = JSON.parse(fm.readString(dataPath));
+    if (!Array.isArray(parsed.tasks)) throw new Error("Invalid task file");
+    parsed.version = 2;
     return parsed;
-  } catch (e) {
-    const backup = dataPath + ".backup-" + Date.now();
-    try { fm.copy(dataPath, backup); } catch (_) {}
+  } catch (_) {
+    try { fm.copy(dataPath, dataPath + ".backup-" + Date.now()); } catch (_) {}
     const seed = defaultData();
     saveData(seed);
     return seed;
@@ -60,24 +111,47 @@ function loadData() {
 
 function saveData(data) {
   data.updatedAt = nowISO();
+  data.version = 2;
   fm.writeString(dataPath, JSON.stringify(data, null, 2));
 }
 
 function normalizeList(value) {
-  const v = String(value || "").trim().toLowerCase();
-  return v === "business" ? "business" : "personal";
+  return String(value || "").toLowerCase() === "business" ? "business" : "personal";
 }
 
 function listTitle(list) {
   return list === "business" ? "Business" : "Personal";
 }
 
-function fmtDate(date) {
-  const d = date || new Date();
+function normalizeTheme(value) {
+  const v = String(value || "").toLowerCase();
+  return THEMES[v] ? v : "graphite";
+}
+
+function normalizeType(value) {
+  const v = String(value || "").toLowerCase();
+  return TYPES.includes(v) ? v : "tasks";
+}
+
+function parseWidgetParameter(raw) {
+  const parts = String(raw || "").toLowerCase().split("|").map(s => s.trim()).filter(Boolean);
+  let type = "tasks";
+  let list = "personal";
+  let themeName = "graphite";
+
+  for (const p of parts) {
+    if (TYPES.includes(p)) type = p;
+    else if (p === "personal" || p === "business") list = p;
+    else if (THEMES[p]) themeName = p;
+  }
+  return { type, list, themeName };
+}
+
+function fmtDate(date, format) {
   const df = new DateFormatter();
   df.locale = "en_US";
-  df.dateFormat = "EEE, MMM d";
-  return df.string(d).toUpperCase();
+  df.dateFormat = format || "EEE, MMM d";
+  return df.string(date || new Date());
 }
 
 function fmtDue(iso) {
@@ -90,12 +164,41 @@ function fmtDue(iso) {
   return df.string(d);
 }
 
+function fmtTime(date) {
+  const df = new DateFormatter();
+  df.locale = "en_US";
+  df.useNoDateStyle();
+  df.useShortTimeStyle();
+  return df.string(date || new Date());
+}
+
 function scriptURL(params = {}) {
   const base = URLScheme.forRunningScript();
   const q = Object.entries(params)
     .map(([k,v]) => encodeURIComponent(k) + "=" + encodeURIComponent(String(v)))
     .join("&");
   return q ? base + (base.includes("?") ? "&" : "?") + q : base;
+}
+
+function openTasks(data, list) {
+  return data.tasks
+    .filter(t => t.list === list && !t.completed)
+    .sort((a,b) => {
+      if (a.due && b.due) return new Date(a.due) - new Date(b.due);
+      if (a.due) return -1;
+      if (b.due) return 1;
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
+}
+
+function completedToday(data, list) {
+  const today = new Date().toDateString();
+  return data.tasks.filter(t =>
+    t.list === list &&
+    t.completed &&
+    t.completedAt &&
+    new Date(t.completedAt).toDateString() === today
+  ).length;
 }
 
 async function scheduleTaskNotification(task) {
@@ -120,6 +223,7 @@ async function toggleTask(data, id) {
   const task = data.tasks.find(t => t.id === id);
   if (!task) return false;
   task.completed = !task.completed;
+  task.completedAt = task.completed ? nowISO() : null;
   if (task.completed) await cancelTaskNotification(task.id);
   else await scheduleTaskNotification(task);
   saveData(data);
@@ -147,14 +251,7 @@ async function addTaskFlow(data, initialList) {
     if (!Number.isNaN(candidate.getTime())) due = candidate.toISOString();
   }
 
-  const task = {
-    id: uid(),
-    list: initialList,
-    title,
-    completed: false,
-    due,
-    createdAt: nowISO()
-  };
+  const task = { id: uid(), list: initialList, title, completed: false, due, createdAt: nowISO(), completedAt: null };
   data.tasks.push(task);
   saveData(data);
   await scheduleTaskNotification(task);
@@ -195,151 +292,372 @@ async function editTaskFlow(data, task) {
   return true;
 }
 
-function buildWidget(data, list) {
-  const widget = new ListWidget();
-  widget.backgroundColor = COLORS.bg;
-  widget.setPadding(14, 15, 13, 15);
-  widget.spacing = 0;
+function baseWidget(t) {
+  const w = new ListWidget();
+  w.backgroundColor = C(t.bg);
+  w.setPadding(14, 15, 13, 15);
+  w.spacing = 0;
+  return w;
+}
 
-  const header = widget.addStack();
-  header.layoutHorizontally();
-  header.centerAlignContent();
+function addGradientDivider(widget, t, verticalPadding) {
+  widget.addSpacer(verticalPadding == null ? 8 : verticalPadding);
+  const line = widget.addStack();
+  line.size = new Size(0, 1);
+  const g = new LinearGradient();
+  g.colors = [C(t.line, 0.52), C(t.line, 0.02)];
+  g.locations = [0, 1];
+  line.backgroundGradient = g;
+  widget.addSpacer(verticalPadding == null ? 8 : verticalPadding);
+}
 
-  const left = header.addStack();
+function addHeader(widget, t, title, subtitle, metaURL) {
+  const row = widget.addStack();
+  row.layoutHorizontally();
+  row.centerAlignContent();
+
+  const left = row.addStack();
   left.layoutVertically();
 
-  const date = left.addText(fmtDate(new Date()));
-  date.font = Font.mediumSystemFont(9);
-  date.textColor = COLORS.secondary;
-  date.lineLimit = 1;
+  if (subtitle) {
+    const s = left.addText(subtitle.toUpperCase());
+    s.font = Font.mediumSystemFont(8);
+    s.textColor = C(t.secondary);
+    s.lineLimit = 1;
+  }
 
-  const title = left.addText(listTitle(list));
-  title.font = new Font("Georgia", 26);
-  title.textColor = COLORS.text;
-  title.lineLimit = 1;
+  const h = left.addText(title);
+  h.font = displayFont(t, 25, "regular");
+  h.textColor = C(t.text);
+  h.lineLimit = 1;
 
-  header.addSpacer();
+  row.addSpacer();
 
-  const mark = header.addText("◆");
-  mark.font = Font.mediumSystemFont(8);
-  mark.textColor = COLORS.secondary;
-  mark.url = scriptURL({ action: "open", list });
+  const m = row.addText(t.mark);
+  m.font = Font.mediumSystemFont(8);
+  m.textColor = C(t.accent);
+  if (metaURL) m.url = metaURL;
+}
 
-  widget.addSpacer(8);
+function addCard(parent, t, padding) {
+  const card = parent.addStack();
+  card.backgroundColor = C(t.panel);
+  card.cornerRadius = t.radius;
+  const p = padding == null ? 10 : padding;
+  card.setPadding(p, p, p, p);
+  return card;
+}
 
-  const divider = widget.addStack();
-  divider.size = new Size(0, 1);
-  const gradient = new LinearGradient();
-  gradient.colors = [COLORS.dividerA, COLORS.dividerB];
-  gradient.locations = [0, 1];
-  divider.backgroundGradient = gradient;
+function addMetric(card, t, value, label, large) {
+  card.layoutVertically();
+  const v = card.addText(String(value));
+  v.font = displayFont(t, large ? 25 : 18, "bold");
+  v.textColor = C(t.text);
+  v.lineLimit = 1;
+  const l = card.addText(label.toUpperCase());
+  l.font = Font.mediumSystemFont(7);
+  l.textColor = C(t.secondary);
+  l.lineLimit = 1;
+}
 
-  widget.addSpacer(9);
-
-  const active = data.tasks
-    .filter(t => t.list === list && !t.completed)
-    .sort((a,b) => {
-      if (a.due && b.due) return new Date(a.due) - new Date(b.due);
-      if (a.due) return -1;
-      if (b.due) return 1;
-      return new Date(a.createdAt) - new Date(b.createdAt);
-    });
-
+function buildTasksWidget(data, opts) {
+  const t = theme(opts.themeName);
   const family = config.widgetFamily || "medium";
+  const w = baseWidget(t);
+
+  addHeader(w, t, listTitle(opts.list), fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  addGradientDivider(w, t, family === "small" ? 5 : 7);
+
+  const active = openTasks(data, opts.list);
   const maxRows = family === "large" ? 7 : family === "small" ? 2 : 4;
 
   if (!active.length) {
-    widget.addSpacer();
-    const empty = widget.addText("Nothing pressing.");
-    empty.font = Font.regularSystemFont(12);
-    empty.textColor = COLORS.secondary;
-    empty.url = scriptURL({ action: "add", list });
-    widget.addSpacer();
+    w.addSpacer();
+    const e = w.addText("Nothing pressing.");
+    e.font = displayFont(t, 13, "regular");
+    e.textColor = C(t.secondary);
+    e.url = scriptURL({ action: "add", list: opts.list });
+    w.addSpacer();
   } else {
     for (const task of active.slice(0, maxRows)) {
-      const row = widget.addStack();
+      const row = w.addStack();
       row.layoutHorizontally();
       row.centerAlignContent();
-      row.url = scriptURL({ action: "toggle", id: task.id, list });
+      row.url = scriptURL({ action: "toggle", id: task.id, list: opts.list });
       row.setPadding(2, 0, 2, 0);
 
-      const circle = row.addText("○");
-      circle.font = Font.regularSystemFont(16);
-      circle.textColor = COLORS.secondary;
-
+      const dot = row.addText("○");
+      dot.font = Font.regularSystemFont(family === "small" ? 13 : 15);
+      dot.textColor = C(t.accent);
       row.addSpacer(8);
 
-      const taskStack = row.addStack();
-      taskStack.layoutVertically();
+      const col = row.addStack();
+      col.layoutVertically();
 
-      const txt = taskStack.addText(task.title);
-      txt.font = Font.mediumSystemFont(family === "small" ? 11 : 13);
-      txt.textColor = COLORS.text;
-      txt.lineLimit = 1;
-      txt.minimumScaleFactor = 0.75;
+      const tx = col.addText(task.title);
+      tx.font = Font.mediumSystemFont(family === "small" ? 11 : 13);
+      tx.textColor = C(t.text);
+      tx.lineLimit = 1;
+      tx.minimumScaleFactor = 0.72;
 
       const due = fmtDue(task.due);
       if (due && family !== "small") {
-        const sub = taskStack.addText(due);
-        sub.font = Font.regularSystemFont(8);
-        sub.textColor = COLORS.secondary;
-        sub.lineLimit = 1;
+        const d = col.addText(due);
+        d.font = Font.regularSystemFont(8);
+        d.textColor = C(t.secondary);
       }
-
       row.addSpacer();
-      widget.addSpacer(family === "large" ? 6 : 5);
+      w.addSpacer(family === "large" ? 6 : 5);
     }
   }
 
   if (family !== "small") {
-    widget.addSpacer();
-    const footer = widget.addStack();
+    w.addSpacer();
+    const footer = w.addStack();
     footer.layoutHorizontally();
-    footer.centerAlignContent();
-
     const add = footer.addText("＋  ADD");
     add.font = Font.semiboldSystemFont(9);
-    add.textColor = COLORS.secondary;
-    add.url = scriptURL({ action: "add", list });
-
+    add.textColor = C(t.secondary);
+    add.url = scriptURL({ action: "add", list: opts.list });
     footer.addSpacer();
-
-    const count = active.length;
-    const meta = footer.addText(count === 1 ? "1 OPEN" : count + " OPEN");
-    meta.font = Font.mediumSystemFont(8);
-    meta.textColor = COLORS.faint;
-    meta.url = scriptURL({ action: "open", list });
+    const c = footer.addText(active.length + " OPEN");
+    c.font = Font.mediumSystemFont(8);
+    c.textColor = C(t.faint);
   }
 
-  widget.url = scriptURL({ action: "open", list });
-  widget.refreshAfterDate = new Date(Date.now() + 20 * 60 * 1000);
-  return widget;
+  w.url = scriptURL({ action: "open", list: opts.list });
+  w.refreshAfterDate = new Date(Date.now() + 20 * 60 * 1000);
+  return w;
+}
+
+function buildClockWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const family = config.widgetFamily || "medium";
+  const w = baseWidget(t);
+
+  if (opts.themeName === "luxe" || opts.themeName === "editorial") {
+    const label = w.addText(fmtDate(new Date(), "EEEE, MMMM d").toUpperCase());
+    label.font = Font.mediumSystemFont(8);
+    label.textColor = C(t.secondary);
+    w.addSpacer(family === "small" ? 4 : 8);
+  }
+
+  const time = w.addText(fmtTime(new Date()));
+  time.font = displayFont(t, family === "small" ? 38 : family === "large" ? 64 : 52, "bold");
+  time.textColor = C(t.text);
+  time.minimumScaleFactor = 0.65;
+  time.lineLimit = 1;
+
+  if (opts.themeName !== "luxe" && opts.themeName !== "editorial") {
+    const day = w.addText(fmtDate(new Date(), "EEEE · MMM d"));
+    day.font = Font.mediumSystemFont(9);
+    day.textColor = C(t.secondary);
+  }
+
+  w.addSpacer();
+
+  if (family !== "small") {
+    const card = addCard(w, t, 11);
+    card.layoutHorizontally();
+
+    const left = card.addStack();
+    addMetric(left, t, openTasks(data, "personal").length, "Personal", false);
+    card.addSpacer();
+
+    const mid = card.addStack();
+    addMetric(mid, t, openTasks(data, "business").length, "Business", false);
+    card.addSpacer();
+
+    const right = card.addStack();
+    addMetric(right, t, completedToday(data, opts.list), "Done today", false);
+  }
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  w.refreshAfterDate = new Date(Date.now() + 60 * 1000);
+  return w;
+}
+
+function buildAgendaWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const family = config.widgetFamily || "medium";
+  const w = baseWidget(t);
+
+  addHeader(w, t, "Agenda", listTitle(opts.list), scriptURL({ action: "open", list: opts.list }));
+  addGradientDivider(w, t, 6);
+
+  const upcoming = openTasks(data, opts.list)
+    .filter(x => x.due)
+    .sort((a,b) => new Date(a.due) - new Date(b.due));
+
+  const source = upcoming.length ? upcoming : openTasks(data, opts.list);
+  const maxRows = family === "large" ? 6 : family === "small" ? 2 : 4;
+
+  if (!source.length) {
+    w.addSpacer();
+    const empty = w.addText("Your day is clear.");
+    empty.font = displayFont(t, 14, "regular");
+    empty.textColor = C(t.secondary);
+    w.addSpacer();
+  } else {
+    for (const task of source.slice(0, maxRows)) {
+      const row = w.addStack();
+      row.layoutHorizontally();
+      row.centerAlignContent();
+      row.url = scriptURL({ action: "toggle", id: task.id, list: opts.list });
+
+      const time = row.addText(task.due ? fmtDate(new Date(task.due), "h:mm a") : "OPEN");
+      time.font = Font.semiboldSystemFont(8);
+      time.textColor = C(t.accent);
+      time.lineLimit = 1;
+      row.addSpacer(10);
+
+      const title = row.addText(task.title);
+      title.font = Font.mediumSystemFont(12);
+      title.textColor = C(t.text);
+      title.lineLimit = 1;
+      title.minimumScaleFactor = 0.7;
+
+      row.addSpacer();
+      w.addSpacer(7);
+    }
+  }
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
+  return w;
+}
+
+function buildDashboardWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const family = config.widgetFamily || "medium";
+  const w = baseWidget(t);
+
+  addHeader(w, t, "NaviOS", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(8);
+
+  const top = w.addStack();
+  top.layoutHorizontally();
+
+  const clockCard = addCard(top, t, 10);
+  clockCard.layoutVertically();
+  const time = clockCard.addText(fmtTime(new Date()));
+  time.font = displayFont(t, family === "small" ? 22 : 27, "bold");
+  time.textColor = C(t.text);
+  time.lineLimit = 1;
+  const day = clockCard.addText(fmtDate(new Date(), "EEE · MMM d"));
+  day.font = Font.mediumSystemFont(7);
+  day.textColor = C(t.secondary);
+
+  if (family !== "small") {
+    top.addSpacer(8);
+    const countCard = addCard(top, t, 10);
+    addMetric(countCard, t, openTasks(data, opts.list).length, listTitle(opts.list) + " open", true);
+  }
+
+  w.addSpacer(8);
+
+  if (family !== "small") {
+    const bottom = w.addStack();
+    bottom.layoutHorizontally();
+
+    const personal = addCard(bottom, t, 9);
+    addMetric(personal, t, openTasks(data, "personal").length, "Personal", false);
+    bottom.addSpacer(8);
+
+    const business = addCard(bottom, t, 9);
+    addMetric(business, t, openTasks(data, "business").length, "Business", false);
+    bottom.addSpacer(8);
+
+    const done = addCard(bottom, t, 9);
+    addMetric(done, t, completedToday(data, opts.list), "Done", false);
+  }
+
+  if (family === "large") {
+    w.addSpacer(9);
+    const next = openTasks(data, opts.list).slice(0, 3);
+    for (const task of next) {
+      const row = w.addStack();
+      row.layoutHorizontally();
+      row.url = scriptURL({ action: "toggle", id: task.id, list: opts.list });
+      const bullet = row.addText("○");
+      bullet.textColor = C(t.accent);
+      bullet.font = Font.regularSystemFont(13);
+      row.addSpacer(7);
+      const tx = row.addText(task.title);
+      tx.font = Font.mediumSystemFont(11);
+      tx.textColor = C(t.text);
+      tx.lineLimit = 1;
+      row.addSpacer();
+      w.addSpacer(5);
+    }
+  }
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+  return w;
+}
+
+function buildWidget(data, opts) {
+  if (opts.type === "clock") return buildClockWidget(data, opts);
+  if (opts.type === "agenda") return buildAgendaWidget(data, opts);
+  if (opts.type === "dashboard") return buildDashboardWidget(data, opts);
+  return buildTasksWidget(data, opts);
+}
+
+async function previewWidget(data, state) {
+  const a = new Alert();
+  a.title = "Preview Widget";
+  a.message = "Choose a widget type.";
+  a.addAction("Tasks");
+  a.addAction("Clock");
+  a.addAction("Agenda");
+  a.addAction("Dashboard");
+  a.addCancelAction("Cancel");
+  const typeIndex = await a.present();
+  if (typeIndex < 0) return;
+
+  const themeAlert = new Alert();
+  themeAlert.title = "Choose Theme";
+  const themeKeys = Object.keys(THEMES);
+  for (const key of themeKeys) themeAlert.addAction(THEMES[key].name);
+  themeAlert.addCancelAction("Cancel");
+  const themeIndex = await themeAlert.present();
+  if (themeIndex < 0) return;
+
+  const opts = {
+    type: TYPES[typeIndex],
+    list: state.selected,
+    themeName: themeKeys[themeIndex]
+  };
+  const widget = buildWidget(data, opts);
+  await widget.presentMedium();
 }
 
 function populateManager(table, data, state) {
   table.removeAllRows();
 
+  const t = THEMES.graphite;
   const selected = state.selected;
 
   const top = new UITableRow();
   top.height = 64;
   top.isHeader = true;
-  top.backgroundColor = COLORS.bg;
-  const heading = top.addText("NaviOS", listTitle(selected));
-  heading.titleFont = new Font("Georgia", 28);
-  heading.titleColor = COLORS.text;
-  heading.subtitleFont = Font.mediumSystemFont(10);
-  heading.subtitleColor = COLORS.secondary;
+  top.backgroundColor = C(t.bg);
+  const heading = top.addText("NaviOS", listTitle(selected) + " · Widget Studio");
+  heading.titleFont = serifFont(28);
+  heading.titleColor = C(t.text);
+  heading.subtitleFont = Font.mediumSystemFont(9);
+  heading.subtitleColor = C(t.secondary);
   table.addRow(top);
 
   const switcher = new UITableRow();
   switcher.height = 42;
-  switcher.backgroundColor = COLORS.panel;
+  switcher.backgroundColor = C(t.panel);
   switcher.cellSpacing = 8;
 
   const personal = switcher.addButton(selected === "personal" ? "●  Personal" : "○  Personal");
   personal.titleFont = Font.semiboldSystemFont(12);
-  personal.titleColor = selected === "personal" ? COLORS.text : COLORS.secondary;
+  personal.titleColor = selected === "personal" ? C(t.text) : C(t.secondary);
   personal.dismissOnTap = false;
   personal.onTap = () => {
     state.selected = "personal";
@@ -349,22 +667,31 @@ function populateManager(table, data, state) {
 
   const business = switcher.addButton(selected === "business" ? "●  Business" : "○  Business");
   business.titleFont = Font.semiboldSystemFont(12);
-  business.titleColor = selected === "business" ? COLORS.text : COLORS.secondary;
+  business.titleColor = selected === "business" ? C(t.text) : C(t.secondary);
   business.dismissOnTap = false;
   business.onTap = () => {
     state.selected = "business";
     populateManager(table, data, state);
     table.reload();
   };
-
   table.addRow(switcher);
+
+  const previewRow = new UITableRow();
+  previewRow.height = 44;
+  previewRow.backgroundColor = C(t.bg);
+  const preview = previewRow.addButton("◫  Preview Custom Widgets");
+  preview.titleFont = Font.semiboldSystemFont(12);
+  preview.titleColor = C(t.accent);
+  preview.dismissOnTap = false;
+  preview.onTap = async () => await previewWidget(data, state);
+  table.addRow(previewRow);
 
   const addRow = new UITableRow();
   addRow.height = 44;
-  addRow.backgroundColor = COLORS.bg;
+  addRow.backgroundColor = C(t.bg);
   const addBtn = addRow.addButton("＋  Add " + listTitle(selected) + " task");
   addBtn.titleFont = Font.semiboldSystemFont(12);
-  addBtn.titleColor = COLORS.text;
+  addBtn.titleColor = C(t.text);
   addBtn.dismissOnTap = false;
   addBtn.onTap = async () => {
     const changed = await addTaskFlow(data, selected);
@@ -376,33 +703,20 @@ function populateManager(table, data, state) {
   table.addRow(addRow);
 
   const tasks = data.tasks
-    .filter(t => t.list === selected)
+    .filter(x => x.list === selected)
     .sort((a,b) => Number(a.completed) - Number(b.completed) || new Date(a.createdAt) - new Date(b.createdAt));
-
-  if (!tasks.length) {
-    const empty = new UITableRow();
-    empty.height = 60;
-    empty.backgroundColor = COLORS.bg;
-    const cell = empty.addText("Nothing pressing.", "Tap + Add to create your first task.");
-    cell.titleFont = new Font("Georgia", 18);
-    cell.titleColor = COLORS.secondary;
-    cell.subtitleFont = Font.regularSystemFont(9);
-    cell.subtitleColor = COLORS.faint;
-    table.addRow(empty);
-  }
 
   for (const task of tasks) {
     const row = new UITableRow();
     row.height = 50;
-    row.backgroundColor = COLORS.bg;
+    row.backgroundColor = C(t.bg);
     row.dismissOnSelect = false;
 
-    const prefix = task.completed ? "✓" : "○";
-    const cell = row.addText(prefix + "  " + task.title, fmtDue(task.due) || "");
+    const cell = row.addText((task.completed ? "✓" : "○") + "  " + task.title, fmtDue(task.due) || "");
     cell.titleFont = Font.mediumSystemFont(13);
-    cell.titleColor = task.completed ? COLORS.secondary : COLORS.text;
+    cell.titleColor = task.completed ? C(t.secondary) : C(t.text);
     cell.subtitleFont = Font.regularSystemFont(9);
-    cell.subtitleColor = COLORS.secondary;
+    cell.subtitleColor = C(t.secondary);
 
     row.onSelect = async () => {
       const choose = new Alert();
@@ -421,14 +735,27 @@ function populateManager(table, data, state) {
     table.addRow(row);
   }
 
+  const info = new UITableRow();
+  info.height = 54;
+  info.backgroundColor = C(t.panel);
+  const text = info.addText(
+    "Widget parameters",
+    "tasks|personal|graphite  ·  clock|editorial  ·  agenda|business|stone  ·  dashboard|personal|noir"
+  );
+  text.titleFont = Font.semiboldSystemFont(9);
+  text.titleColor = C(t.secondary);
+  text.subtitleFont = Font.regularSystemFont(7);
+  text.subtitleColor = C(t.faint);
+  table.addRow(info);
+
   const footer = new UITableRow();
-  footer.height = 38;
-  footer.backgroundColor = COLORS.bg;
-  const f = footer.addText("NaviOS Widgets · v" + VERSION, "Local-only task data");
+  footer.height = 36;
+  footer.backgroundColor = C(t.bg);
+  const f = footer.addText("NaviOS Widgets · v" + VERSION, "6 themes · 4 widget types · local-only");
   f.titleFont = Font.mediumSystemFont(8);
-  f.titleColor = COLORS.faint;
+  f.titleColor = C(t.faint);
   f.subtitleFont = Font.regularSystemFont(8);
-  f.subtitleColor = COLORS.faint;
+  f.subtitleColor = C(t.faint);
   table.addRow(footer);
 }
 
@@ -449,20 +776,18 @@ async function handleAction(data) {
     await toggleTask(data, q.id);
     return { list, reopen: false };
   }
-
   if (action === "add") {
     await addTaskFlow(data, list);
     return { list, reopen: true };
   }
-
   return { list, reopen: true };
 }
 
 let data = loadData();
 
 if (config.runsInWidget) {
-  const list = normalizeList(args.widgetParameter);
-  const widget = buildWidget(data, list);
+  const opts = parseWidgetParameter(args.widgetParameter);
+  const widget = buildWidget(data, opts);
   Script.setWidget(widget);
   Script.complete();
 } else {
