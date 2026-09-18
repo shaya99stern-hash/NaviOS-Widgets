@@ -214,7 +214,7 @@ function buildWidget(data, list) {
   date.lineLimit = 1;
 
   const title = left.addText(listTitle(list));
-  title.font = Font.newYorkFont(26);
+  title.font = new Font("Georgia", 26);
   title.textColor = COLORS.text;
   title.lineLimit = 1;
 
@@ -326,7 +326,7 @@ function populateManager(table, data, state) {
   top.isHeader = true;
   top.backgroundColor = COLORS.bg;
   const heading = top.addText("NaviOS", listTitle(selected));
-  heading.titleFont = Font.newYorkFont(28);
+  heading.titleFont = new Font("Georgia", 28);
   heading.titleColor = COLORS.text;
   heading.subtitleFont = Font.mediumSystemFont(10);
   heading.subtitleColor = COLORS.secondary;
@@ -384,7 +384,7 @@ function populateManager(table, data, state) {
     empty.height = 60;
     empty.backgroundColor = COLORS.bg;
     const cell = empty.addText("Nothing pressing.", "Tap + Add to create your first task.");
-    cell.titleFont = Font.newYorkFont(18);
+    cell.titleFont = new Font("Georgia", 18);
     cell.titleColor = COLORS.secondary;
     cell.subtitleFont = Font.regularSystemFont(9);
     cell.subtitleColor = COLORS.faint;
