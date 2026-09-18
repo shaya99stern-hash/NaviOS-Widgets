@@ -316,86 +316,128 @@ function buildWidget(data, list) {
   return widget;
 }
 
-async function presentManager(data, initialList) {
-  let selected = initialList;
+function populateManager(table, data, state) {
+  table.removeAllRows();
 
-  while (true) {
-    const table = new UITable();
-    table.showSeparators = false;
+  const selected = state.selected;
 
-    const top = new UITableRow();
-    top.height = 60;
-    top.isHeader = true;
-    const heading = top.addText("NaviOS", listTitle(selected));
-    heading.titleFont = Font.newYorkFont(28);
-    heading.titleColor = COLORS.text;
-    heading.subtitleFont = Font.mediumSystemFont(10);
-    heading.subtitleColor = COLORS.secondary;
-    table.addRow(top);
+  const top = new UITableRow();
+  top.height = 64;
+  top.isHeader = true;
+  top.backgroundColor = COLORS.bg;
+  const heading = top.addText("NaviOS", listTitle(selected));
+  heading.titleFont = Font.newYorkFont(28);
+  heading.titleColor = COLORS.text;
+  heading.subtitleFont = Font.mediumSystemFont(10);
+  heading.subtitleColor = COLORS.secondary;
+  table.addRow(top);
 
-    const switcher = new UITableRow();
-    switcher.height = 44;
-    const personal = switcher.addText(selected === "personal" ? "●  Personal" : "○  Personal");
-    const business = switcher.addText(selected === "business" ? "●  Business" : "○  Business");
-    personal.titleColor = selected === "personal" ? COLORS.text : COLORS.secondary;
-    business.titleColor = selected === "business" ? COLORS.text : COLORS.secondary;
-    personal.titleFont = Font.semiboldSystemFont(12);
-    business.titleFont = Font.semiboldSystemFont(12);
-    switcher.onSelect = async () => {
-      selected = selected === "personal" ? "business" : "personal";
-    };
-    table.addRow(switcher);
+  const switcher = new UITableRow();
+  switcher.height = 42;
+  switcher.backgroundColor = COLORS.panel;
+  switcher.cellSpacing = 8;
 
-    const addRow = new UITableRow();
-    addRow.height = 42;
-    const addText = addRow.addText("＋  Add " + listTitle(selected) + " task");
-    addText.titleFont = Font.semiboldSystemFont(12);
-    addText.titleColor = COLORS.text;
-    addRow.onSelect = async () => {
-      await addTaskFlow(data, selected);
-    };
-    table.addRow(addRow);
+  const personal = switcher.addButton(selected === "personal" ? "●  Personal" : "○  Personal");
+  personal.titleFont = Font.semiboldSystemFont(12);
+  personal.titleColor = selected === "personal" ? COLORS.text : COLORS.secondary;
+  personal.dismissOnTap = false;
+  personal.onTap = () => {
+    state.selected = "personal";
+    populateManager(table, data, state);
+    table.reload();
+  };
 
-    const tasks = data.tasks
-      .filter(t => t.list === selected)
-      .sort((a,b) => Number(a.completed) - Number(b.completed) || new Date(a.createdAt) - new Date(b.createdAt));
+  const business = switcher.addButton(selected === "business" ? "●  Business" : "○  Business");
+  business.titleFont = Font.semiboldSystemFont(12);
+  business.titleColor = selected === "business" ? COLORS.text : COLORS.secondary;
+  business.dismissOnTap = false;
+  business.onTap = () => {
+    state.selected = "business";
+    populateManager(table, data, state);
+    table.reload();
+  };
 
-    for (const task of tasks) {
-      const row = new UITableRow();
-      row.height = 48;
+  table.addRow(switcher);
 
-      const prefix = task.completed ? "✓" : "○";
-      const cell = row.addText(prefix + "  " + task.title, fmtDue(task.due) || "");
-      cell.titleFont = Font.mediumSystemFont(13);
-      cell.titleColor = task.completed ? COLORS.secondary : COLORS.text;
-      cell.subtitleFont = Font.regularSystemFont(9);
-      cell.subtitleColor = COLORS.secondary;
-
-      row.onSelect = async () => {
-        const choose = new Alert();
-        choose.title = task.title;
-        choose.addAction(task.completed ? "Mark Open" : "Complete");
-        choose.addAction("Edit");
-        choose.addCancelAction("Cancel");
-        const c = await choose.present();
-        if (c === 0) await toggleTask(data, task.id);
-        if (c === 1) await editTaskFlow(data, task);
-      };
-      table.addRow(row);
+  const addRow = new UITableRow();
+  addRow.height = 44;
+  addRow.backgroundColor = COLORS.bg;
+  const addBtn = addRow.addButton("＋  Add " + listTitle(selected) + " task");
+  addBtn.titleFont = Font.semiboldSystemFont(12);
+  addBtn.titleColor = COLORS.text;
+  addBtn.dismissOnTap = false;
+  addBtn.onTap = async () => {
+    const changed = await addTaskFlow(data, selected);
+    if (changed) {
+      populateManager(table, data, state);
+      table.reload();
     }
+  };
+  table.addRow(addRow);
 
-    const footer = new UITableRow();
-    footer.height = 38;
-    const f = footer.addText("NaviOS Widgets · v" + VERSION, "Local-only task data");
-    f.titleFont = Font.mediumSystemFont(8);
-    f.titleColor = COLORS.faint;
-    f.subtitleFont = Font.regularSystemFont(8);
-    f.subtitleColor = COLORS.faint;
-    table.addRow(footer);
+  const tasks = data.tasks
+    .filter(t => t.list === selected)
+    .sort((a,b) => Number(a.completed) - Number(b.completed) || new Date(a.createdAt) - new Date(b.createdAt));
 
-    await table.present(false);
-    break;
+  if (!tasks.length) {
+    const empty = new UITableRow();
+    empty.height = 60;
+    empty.backgroundColor = COLORS.bg;
+    const cell = empty.addText("Nothing pressing.", "Tap + Add to create your first task.");
+    cell.titleFont = Font.newYorkFont(18);
+    cell.titleColor = COLORS.secondary;
+    cell.subtitleFont = Font.regularSystemFont(9);
+    cell.subtitleColor = COLORS.faint;
+    table.addRow(empty);
   }
+
+  for (const task of tasks) {
+    const row = new UITableRow();
+    row.height = 50;
+    row.backgroundColor = COLORS.bg;
+    row.dismissOnSelect = false;
+
+    const prefix = task.completed ? "✓" : "○";
+    const cell = row.addText(prefix + "  " + task.title, fmtDue(task.due) || "");
+    cell.titleFont = Font.mediumSystemFont(13);
+    cell.titleColor = task.completed ? COLORS.secondary : COLORS.text;
+    cell.subtitleFont = Font.regularSystemFont(9);
+    cell.subtitleColor = COLORS.secondary;
+
+    row.onSelect = async () => {
+      const choose = new Alert();
+      choose.title = task.title;
+      choose.addAction(task.completed ? "Mark Open" : "Complete");
+      choose.addAction("Edit");
+      choose.addCancelAction("Cancel");
+      const c = await choose.present();
+      if (c === 0) await toggleTask(data, task.id);
+      if (c === 1) await editTaskFlow(data, task);
+      if (c >= 0) {
+        populateManager(table, data, state);
+        table.reload();
+      }
+    };
+    table.addRow(row);
+  }
+
+  const footer = new UITableRow();
+  footer.height = 38;
+  footer.backgroundColor = COLORS.bg;
+  const f = footer.addText("NaviOS Widgets · v" + VERSION, "Local-only task data");
+  f.titleFont = Font.mediumSystemFont(8);
+  f.titleColor = COLORS.faint;
+  f.subtitleFont = Font.regularSystemFont(8);
+  f.subtitleColor = COLORS.faint;
+  table.addRow(footer);
+}
+
+async function presentManager(data, initialList) {
+  const table = new UITable();
+  table.showSeparators = false;
+  const state = { selected: initialList };
+  populateManager(table, data, state);
+  await table.present(false);
 }
 
 async function handleAction(data) {
