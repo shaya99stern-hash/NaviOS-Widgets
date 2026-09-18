@@ -1,39 +1,85 @@
 # NaviOS Widgets
 
-Native, offline-first iPhone widgets in the NaviOS visual language.
+A dark, minimal iPhone to-do widget system in the NaviOS visual language.
 
-## What this project is
+## Recommended path: Scriptable
 
-- **Native SwiftUI app** — no embedded website and no PWA runtime.
-- **WidgetKit Home Screen widget** — medium and large layouts.
-- **Interactive task completion** using App Intents.
-- **Offline-first shared storage** through an App Group.
-- **Local notifications** for due-task reminders.
-- **Optional GPS context** for location-aware tasks without needing a network connection.
+The easiest version to actually use on an iPhone is the **Scriptable** build.
 
-> Widgets are intentionally glanceable. Apple doesn't support arbitrary scrolling lists or text entry inside a widget, so task entry lives in the companion app while completion can happen directly from the widget.
+It gives you a real iOS Home Screen widget without:
+- Xcode
+- TestFlight
+- Apple Developer membership
+- sideloading
+- weekly re-signing
+- Vercel
+- a backend server
 
-## Build
+The Scriptable app provides the native WidgetKit host, while `Scriptable/NaviOS.js` provides the NaviOS design, local task data, reminders, and widget behavior.
 
-This repository uses [XcodeGen](https://github.com/yonaskolb/XcodeGen) so the Xcode project is reproducible instead of committing a fragile generated `.xcodeproj`.
+### Install
 
-1. Install Xcode and XcodeGen on a Mac.
-2. In the repo root run: `xcodegen generate`
-3. Open `NaviOSWidgets.xcodeproj`.
-4. Select your Apple Development team for both targets.
-5. If the App Group identifier is unavailable to your team, replace `group.com.navios.widgets` in `project.yml` and `Shared/AppConstants.swift`.
-6. Run the NaviOSWidgets app on your iPhone once to grant notification/location permission, then add the widget from the iPhone Home Screen.
+Start here:
+
+**`Scriptable/INSTALL.md`**
+
+Then copy:
+
+**`Scriptable/NaviOS.js`**
+
+into a Scriptable script named exactly `NaviOS`.
+
+### Widget setup
+
+Add a Scriptable widget from the iPhone Home Screen and configure:
+
+- Script: `NaviOS`
+- When Interacting: `Run Script`
+- Parameter: `personal` or `business`
+
+Medium and large widgets are recommended because they support individual tappable elements.
+
+## Scriptable features
+
+- Personal / Business lists
+- medium and large real Home Screen widgets
+- matte-black NaviOS styling
+- serif editorial heading
+- compact task rows
+- task completion from the widget
+- add-task action
+- local reminder notifications
+- local JSON storage
+- no web dependency after installation
+- no task upload
+
+Local data lives in Scriptable's Documents directory at:
+
+`Documents/NaviOS/tasks.json`
+
+## Native Swift version
+
+The original native SwiftUI + WidgetKit implementation is still preserved in this repository.
+
+It includes:
+- WidgetKit
+- App Intents
+- App Group storage
+- local notifications
+- optional CoreLocation support
+- Personal / Business widget configuration
+
+That version remains useful for a future standalone NaviOS app, but it is **not the recommended install path right now** because native distribution requires Apple signing.
 
 ## Design
 
-The UI is intentionally matte black, restrained, serif-led, and minimal:
-- warm gray typography
-- thin gradient separator
-- oversized editorial date
-- subtle task rows
-- no web chrome
-- no dependence on the internet
+NaviOS Widgets is intentionally:
+- matte
+- minimal
+- dark
+- serif-led
+- low-noise
+- compact
+- privacy-first
 
-## Privacy
-
-Task data stays on-device in the shared App Group container. GPS is optional. The current implementation stores coordinates only when the user explicitly attaches a location to a task; it does not upload location or task data anywhere.
+No bright productivity-app styling, unnecessary cards, or web chrome.
