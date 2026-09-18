@@ -1,98 +1,62 @@
-# NaviOS Widgets — Fast Install
+# NaviOS Widgets — Simple Install
 
 ## 1. Install Scriptable once
 Install **Scriptable** from the App Store.
 
-## 2. Open the NaviOS package
-Open **NaviOS.scriptable** from this repository and import it into Scriptable as **NaviOS**.
+## 2. Open NaviOS
+Open **NaviOS.scriptable** and import it into Scriptable as **NaviOS**.
 
-No copying or pasting code is required.
+No copying code and no widget parameters are required.
 
 ## 3. Run NaviOS once
-Open/run **NaviOS** in Scriptable once.
+Open **NaviOS** inside Scriptable.
 
-This creates the local task database and opens **NaviOS Widget Studio**, where you can manage tasks and preview custom widget styles.
+Inside NaviOS, tap:
 
-## 4. Add a real Home Screen widget
-Apple requires this placement step manually:
+**Home Widget**
 
-1. Long-press the iPhone Home Screen.
+Then choose:
+1. Widget type — Tasks, Clock, Agenda, or Dashboard
+2. List — Personal or Business
+3. Style — Graphite Minimal, Matte Editorial, Dashboard Noir, Monochrome Glass, Soft Stone, or Luxe Panel
+
+NaviOS saves your choice automatically.
+
+## 4. Add it to the Home Screen
+This is the one step iOS requires you to do manually:
+
+1. Long-press the Home Screen.
 2. Tap **Edit → Add Widget**.
 3. Search **Scriptable**.
-4. Choose **Medium** or **Large**.
-5. Long-press the new widget → **Edit Widget**.
-6. Script: **NaviOS**
-7. When Interacting: **Run Script**
-8. Enter one of the parameters below.
+4. Choose Medium or Large.
+5. Long-press the widget → **Edit Widget**.
+6. Set **Script** to **NaviOS**.
+7. Set **When Interacting** to **Run Script**.
+8. Leave **Parameter** completely blank.
 
-## Parameter format
+That is it.
 
-`type|list|theme`
+To change the widget later, just open NaviOS and tap **Home Widget** again. You do not need to edit the Home Screen widget settings again.
 
-### Widget types
-- `tasks`
-- `clock`
-- `agenda`
-- `dashboard`
+## Built into NaviOS
+- 6 dark custom themes
+- Tasks
+- Clock
+- Agenda
+- Dashboard
+- Personal / Business
+- local reminders
+- add/edit/delete/complete tasks
+- built-in widget previews
+- local-only storage
+- no Vercel
+- no developer account
+- no Xcode
+- no typed parameters
 
-### Lists
-- `personal`
-- `business`
-
-### Themes
-- `graphite` — Graphite Minimal
-- `editorial` — Matte Editorial
-- `noir` — Dashboard Noir
-- `glass` — Monochrome Glass
-- `stone` — Soft Stone
-- `luxe` — Luxe Panel
-
-## Ready-to-use presets
-
-**Classic NaviOS tasks**
-`tasks|personal|graphite`
-
-**Elegant Personal**
-`tasks|personal|editorial`
-
-**Business dashboard**
-`dashboard|business|noir`
-
-**Luxury clock**
-`clock|personal|luxe`
-
-**Warm agenda**
-`agenda|personal|stone`
-
-**Modern glass dashboard**
-`dashboard|personal|glass`
-
-You can add multiple Scriptable widgets and give every instance a different parameter.
-
-## Preview before adding
-
-Run **NaviOS** normally inside Scriptable and tap:
-
-**Preview Custom Widgets**
-
-Choose the widget type and theme. NaviOS will render a medium preview before you commit it to your Home Screen.
-
-## Local storage
-
-Your tasks are stored locally at:
-
+## Storage
+Tasks:
 `Documents/NaviOS/tasks.json`
 
-No NaviOS server or Vercel deployment is required.
-
-## What NaviOS v2 includes
-
-- six custom dark themes
-- Tasks, Clock, Agenda, and Dashboard widgets
-- Personal / Business task lists
-- medium and large Home Screen layouts
-- local reminders
-- tap-to-complete task rows
-- add/edit/delete task manager
-- built-in widget previews
-- local-only data
+Saved widget choice:
+`Documents/NaviOS/widget-config.json`
