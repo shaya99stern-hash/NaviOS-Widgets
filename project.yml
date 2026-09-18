@@ -1,0 +1,59 @@
+name: NaviOSWidgets
+options:
+  bundleIdPrefix: com.navios
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0
+
+targets:
+  NaviOSWidgets:
+    type: application
+    platform: iOS
+    sources:
+      - path: NaviOSWidgets
+      - path: Shared
+    info:
+      path: NaviOSWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: NaviOS
+        UILaunchScreen: {}
+        NSLocationWhenInUseUsageDescription: NaviOS can use your location to surface tasks you chose to associate with a place.
+        NSUserNotificationsUsageDescription: NaviOS uses notifications for reminders you create.
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - navioswidgets
+    entitlements:
+      path: NaviOSWidgets/NaviOSWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.navios.widgets
+    dependencies:
+      - target: NaviOSWidgetExtension
+
+  NaviOSWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NaviOSWidget
+      - path: Shared
+    info:
+      path: NaviOSWidget/Info.plist
+      properties:
+        CFBundleDisplayName: NaviOS
+        NSWidgetWantsLocation: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: NaviOSWidget/NaviOSWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.navios.widgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.navios.widgets.widget
+        SKIP_INSTALL: YES
