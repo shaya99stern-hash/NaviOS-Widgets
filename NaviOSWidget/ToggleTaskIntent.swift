@@ -2,7 +2,7 @@ import AppIntents
 import Foundation
 
 struct ToggleTaskIntent: AppIntent {
-    static var title: LocalizedStringResource = "Complete NaviOS Task"
+    nonisolated static var title: LocalizedStringResource { "Complete NaviOS Task" }
 
     @Parameter(title: "Task ID")
     var taskID: String
