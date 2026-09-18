@@ -2,12 +2,11 @@ import CoreLocation
 import Foundation
 import Combine
 
-@MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
 
-    @Published var coordinate: (Double, Double)?
-    @Published var authorization: CLAuthorizationStatus = .notDetermined
+    @Published private(set) var coordinate: (Double, Double)?
+    @Published private(set) var authorization: CLAuthorizationStatus = .notDetermined
 
     override init() {
         super.init()
@@ -31,24 +30,34 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorization = manager.authorizationStatus
-        if authorization == .authorizedWhenInUse || authorization == .authorizedAlways {
+        let status = manager.authorizationStatus
+
+        DispatchQueue.main.async { [weak self] in
+            self?.authorization = status
+        }
+
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
             manager.requestLocation()
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        Task { @MainActor in
-            coordinate = (location.coordinate.latitude, location.coordinate.longitude)
-            TaskRepository.updateLastLocation(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude
-            )
+
+        let latitude = location.coordinate.latitude
+        let longitude = location.coordinate.longitude
+
+        DispatchQueue.main.async { [weak self] in
+            self?.coordinate = (latitude, longitude)
         }
+
+        TaskRepository.updateLastLocation(
+            latitude: latitude,
+            longitude: longitude
+        )
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // Location is optional; the rest of NaviOS remains fully offline and functional.
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // GPS is optional. Tasks and reminders remain fully functional offline.
     }
 }
