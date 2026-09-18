@@ -2,10 +2,11 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
+const configPath = fm.joinPath(root, "widget-config.json");
 if (!fm.fileExists(root)) fm.createDirectory(root, true);
 
 const nowISO = () => new Date().toISOString();
@@ -133,11 +134,47 @@ function normalizeType(value) {
   return TYPES.includes(v) ? v : "tasks";
 }
 
+function defaultWidgetConfig() {
+  return { type: "tasks", list: "personal", themeName: "graphite" };
+}
+
+function loadWidgetConfig() {
+  if (!fm.fileExists(configPath)) {
+    const c = defaultWidgetConfig();
+    saveWidgetConfig(c);
+    return c;
+  }
+  try {
+    const c = JSON.parse(fm.readString(configPath));
+    return {
+      type: normalizeType(c.type),
+      list: normalizeList(c.list),
+      themeName: normalizeTheme(c.themeName)
+    };
+  } catch (_) {
+    const c = defaultWidgetConfig();
+    saveWidgetConfig(c);
+    return c;
+  }
+}
+
+function saveWidgetConfig(c) {
+  const clean = {
+    type: normalizeType(c.type),
+    list: normalizeList(c.list),
+    themeName: normalizeTheme(c.themeName)
+  };
+  fm.writeString(configPath, JSON.stringify(clean, null, 2));
+}
+
 function parseWidgetParameter(raw) {
   const parts = String(raw || "").toLowerCase().split("|").map(s => s.trim()).filter(Boolean);
-  let type = "tasks";
-  let list = "personal";
-  let themeName = "graphite";
+  if (!parts.length) return loadWidgetConfig();
+
+  const saved = loadWidgetConfig();
+  let type = saved.type;
+  let list = saved.list;
+  let themeName = saved.themeName;
 
   for (const p of parts) {
     if (TYPES.includes(p)) type = p;
@@ -604,6 +641,60 @@ function buildWidget(data, opts) {
   return buildTasksWidget(data, opts);
 }
 
+async function chooseHomeWidget(data, state) {
+  const current = loadWidgetConfig();
+
+  const typeAlert = new Alert();
+  typeAlert.title = "Home Widget";
+  typeAlert.message = "Choose what your NaviOS widget shows.";
+  typeAlert.addAction("Tasks");
+  typeAlert.addAction("Clock");
+  typeAlert.addAction("Agenda");
+  typeAlert.addAction("Dashboard");
+  typeAlert.addCancelAction("Cancel");
+  const typeIndex = await typeAlert.present();
+  if (typeIndex < 0) return false;
+
+  const listAlert = new Alert();
+  listAlert.title = "Choose List";
+  listAlert.addAction("Personal");
+  listAlert.addAction("Business");
+  listAlert.addCancelAction("Cancel");
+  const listIndex = await listAlert.present();
+  if (listIndex < 0) return false;
+
+  const themeAlert = new Alert();
+  themeAlert.title = "Choose Style";
+  const themeKeys = Object.keys(THEMES);
+  for (const key of themeKeys) themeAlert.addAction(THEMES[key].name);
+  themeAlert.addCancelAction("Cancel");
+  const themeIndex = await themeAlert.present();
+  if (themeIndex < 0) return false;
+
+  const next = {
+    type: TYPES[typeIndex],
+    list: listIndex === 1 ? "business" : "personal",
+    themeName: themeKeys[themeIndex]
+  };
+
+  saveWidgetConfig(next);
+  state.selected = next.list;
+
+  const done = new Alert();
+  done.title = "Home Widget Saved";
+  done.message = TYPES[typeIndex][0].toUpperCase() + TYPES[typeIndex].slice(1) +
+    " · " + listTitle(next.list) + " · " + THEMES[next.themeName].name;
+  done.addAction("Preview");
+  done.addAction("Done");
+  const action = await done.present();
+
+  if (action === 0) {
+    const widget = buildWidget(data, next);
+    await widget.presentMedium();
+  }
+  return true;
+}
+
 async function previewWidget(data, state) {
   const a = new Alert();
   a.title = "Preview Widget";
@@ -676,11 +767,33 @@ function populateManager(table, data, state) {
   };
   table.addRow(switcher);
 
+  const savedWidget = loadWidgetConfig();
+
+  const homeRow = new UITableRow();
+  homeRow.height = 50;
+  homeRow.backgroundColor = C(t.panel);
+  const home = homeRow.addButton(
+    "▣  Home Widget · " +
+    savedWidget.type[0].toUpperCase() + savedWidget.type.slice(1) +
+    " · " + THEMES[savedWidget.themeName].name
+  );
+  home.titleFont = Font.semiboldSystemFont(11);
+  home.titleColor = C(t.text);
+  home.dismissOnTap = false;
+  home.onTap = async () => {
+    const changed = await chooseHomeWidget(data, state);
+    if (changed) {
+      populateManager(table, data, state);
+      table.reload();
+    }
+  };
+  table.addRow(homeRow);
+
   const previewRow = new UITableRow();
-  previewRow.height = 44;
+  previewRow.height = 42;
   previewRow.backgroundColor = C(t.bg);
-  const preview = previewRow.addButton("◫  Preview Custom Widgets");
-  preview.titleFont = Font.semiboldSystemFont(12);
+  const preview = previewRow.addButton("◫  Browse All Widget Styles");
+  preview.titleFont = Font.semiboldSystemFont(11);
   preview.titleColor = C(t.accent);
   preview.dismissOnTap = false;
   preview.onTap = async () => await previewWidget(data, state);
@@ -739,12 +852,12 @@ function populateManager(table, data, state) {
   info.height = 54;
   info.backgroundColor = C(t.panel);
   const text = info.addText(
-    "Widget parameters",
-    "tasks|personal|graphite  ·  clock|editorial  ·  agenda|business|stone  ·  dashboard|personal|noir"
+    "Home Screen setup",
+    "Choose everything inside NaviOS. Leave the Scriptable widget Parameter field blank."
   );
   text.titleFont = Font.semiboldSystemFont(9);
   text.titleColor = C(t.secondary);
-  text.subtitleFont = Font.regularSystemFont(7);
+  text.subtitleFont = Font.regularSystemFont(8);
   text.subtitleColor = C(t.faint);
   table.addRow(info);
 
