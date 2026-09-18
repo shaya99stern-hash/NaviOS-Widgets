@@ -1,57 +1,42 @@
-# NaviOS Scriptable Widget — Install
+# NaviOS Widget — Fast Install
 
-This is the recommended NaviOS Widgets path. It creates a **real iOS Home Screen widget** using Scriptable as the native WidgetKit host.
+## 1. Install Scriptable once
+Install **Scriptable** from the App Store.
 
-## Install
+## 2. Open the NaviOS package
+Open:
 
-1. Install **Scriptable** from the App Store.
-2. Open the raw `Scriptable/NaviOS.js` file from this repository.
-3. Copy the entire file.
-4. In Scriptable, tap **+**, paste it, and name the script exactly:
-   **NaviOS**
-5. Run the script once. It creates the local NaviOS task file and opens the task manager.
+**`NaviOS.scriptable`**
 
-## Add the widget
+This is the packaged NaviOS script. Import it into Scriptable as **NaviOS**.
+
+No copying or pasting code is required.
+
+## 3. Run NaviOS once
+Open/run **NaviOS** in Scriptable once. This creates the local task database and opens the NaviOS task manager.
+
+## 4. Put the real widget on the Home Screen
+Apple requires this placement step manually:
 
 1. Long-press the iPhone Home Screen.
 2. Tap **Edit → Add Widget**.
-3. Search for **Scriptable**.
+3. Search **Scriptable**.
 4. Choose **Medium** or **Large**.
 5. Long-press the new widget → **Edit Widget**.
-6. Set **Script** to `NaviOS`.
-7. Set **When Interacting** to `Run Script`.
-8. Set **Parameter** to:
-   - `personal` for the Personal widget
-   - `business` for the Business widget
+6. Script: **NaviOS**
+7. When Interacting: **Run Script**
+8. Parameter:
+   - **personal** for Personal
+   - **business** for Business
 
-You can add two Scriptable widgets side-by-side or on different Home Screen pages and configure one for each list.
+For two NaviOS widgets, add two Scriptable widgets and use a different parameter for each.
 
-## What works
+## After setup
 
-- Real medium / large iOS Home Screen widget
-- Personal / Business
-- Matte NaviOS visual style
-- Local-only JSON storage
-- Tap a task row to mark it complete
-- Tap **ADD** to create a task
-- Optional local notification times
-- No Vercel
-- No server
-- No Apple Developer account
-- No sideloading or weekly signing
+You do not need GitHub, Vercel, Xcode, TestFlight, or a developer account for normal use.
 
-## Storage
-
-The script uses Scriptable's local Documents directory:
+NaviOS stores tasks locally at:
 
 `Documents/NaviOS/tasks.json`
 
-No task data is uploaded by this script.
-
-## Widget refresh behavior
-
-Scriptable asks iOS to refresh the widget periodically, but iOS ultimately decides refresh timing. Task rows use Scriptable deep links, so taps run the script immediately and update local data.
-
-## Notes
-
-Small widgets are supported visually but iOS only permits one overall tap target there. Medium and large are the recommended NaviOS sizes because Scriptable supports individual element URLs in those sizes.
+The repo also contains `NaviOS.js` for development and inspection, but normal installation should use **NaviOS.scriptable**.
