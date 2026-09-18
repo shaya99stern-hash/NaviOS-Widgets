@@ -44,7 +44,9 @@ enum TaskRepository {
 
     static func remove(at offsets: IndexSet) {
         var tasks = load()
-        tasks.remove(atOffsets: offsets)
+        for index in offsets.sorted(by: >) where tasks.indices.contains(index) {
+            tasks.remove(at: index)
+        }
         save(tasks)
     }
 
