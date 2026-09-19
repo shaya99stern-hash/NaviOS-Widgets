@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.2.0";
+const VERSION = "3.2.1";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -1494,9 +1494,8 @@ function buildOverviewWidget(data, opts) {
 }
 
 
-function chatGPTURL(prompt) {
-  const encoded = encodeURIComponent(prompt || "");
-  return "com.openai.chat://chatgpt.com/?prompt=" + encoded;
+function chatGPTURL() {
+  return "com.openai.chat://";
 }
 
 async function dictateToChatGPT() {
@@ -1506,7 +1505,7 @@ async function dictateToChatGPT() {
 
   try { Pasteboard.copyString(text); } catch (_) {}
 
-  Safari.open(chatGPTURL(text));
+  Safari.open(chatGPTURL());
   return true;
 }
 
@@ -1524,7 +1523,7 @@ async function typeToChatGPT() {
 
   try { Pasteboard.copyString(text); } catch (_) {}
 
-  Safari.open(chatGPTURL(text));
+  Safari.open(chatGPTURL());
   return true;
 }
 
@@ -1623,13 +1622,40 @@ function buildChatGPTWidget(data, opts) {
 
     const drive = addCard(lower, t, 10);
     drive.layoutVertically();
-    drive.url = "https://drive.google.com/drive/u/0/my-drive";
+    drive.url = "https://docs.google.com/document/d/1T2twulKoTevf4TMBxAtnkC54uixROyI_Z3nhNQjZuX4/edit";
     const g1 = drive.addText("DRIVE");
     g1.font = Font.semiboldSystemFont(8);
     g1.textColor = C(t.secondary);
-    const g2 = drive.addText("Open files");
+    const g2 = drive.addText("Hard Rock Hub");
     g2.font = Font.mediumSystemFont(11);
     g2.textColor = C(t.text);
+
+    w.addSpacer(8);
+
+    const caseRow = w.addStack();
+    caseRow.layoutHorizontally();
+
+    const checkpoint = addCard(caseRow, t, 9);
+    checkpoint.layoutVertically();
+    checkpoint.url = "https://docs.google.com/document/d/10viUGHubi9jD12K9yIgR4IvFh3nW8UjlUfXu0k-FhIA/edit";
+    const cp1 = checkpoint.addText("CHECKPOINT");
+    cp1.font = Font.semiboldSystemFont(8);
+    cp1.textColor = C(t.secondary);
+    const cp2 = checkpoint.addText("Current case notes");
+    cp2.font = Font.mediumSystemFont(10);
+    cp2.textColor = C(t.text);
+
+    caseRow.addSpacer(8);
+
+    const chat = addCard(caseRow, t, 9);
+    chat.layoutVertically();
+    chat.url = scriptURL({ action: "chatgptDictate" });
+    const ch1 = chat.addText("DICTATE");
+    ch1.font = Font.semiboldSystemFont(8);
+    ch1.textColor = C(t.secondary);
+    const ch2 = chat.addText("Ask about case");
+    ch2.font = Font.mediumSystemFont(10);
+    ch2.textColor = C(t.text);
   }
 
   w.url = scriptURL({ action: "chatgptDictate" });
