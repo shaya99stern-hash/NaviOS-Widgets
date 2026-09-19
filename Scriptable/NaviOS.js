@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "4.0.0";
+const VERSION = "4.1.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -2124,6 +2124,153 @@ async function buildAccessoryWidget(data, opts) {
   return w;
 }
 
+
+async function buildNextEventWidget(data, opts) {
+  const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
+  addHeader(w,t,"Next Event","GOOGLE CALENDAR",GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  w.addSpacer(8);
+  if(!feed.ok || !feed.events.length){
+    const x=w.addText(feed.ok?"Calendar clear":"Google Calendar not connected");
+    x.font=displayFont(t,16,"regular"); x.textColor=C(t.secondary); return w;
+  }
+  const e=feed.events[0];
+  const time=w.addText(eventTimeLabel(e.start));
+  time.font=displayFont(t,familyFont(22,30,34),"bold"); time.textColor=C(t.accent);
+  const title=w.addText(e.title||"Untitled");
+  title.font=displayFont(t,familyFont(15,19,22),"regular"); title.textColor=C(t.text); title.lineLimit=2;
+  if(e.location && widgetFamily()!=="small"){const loc=w.addText(e.location);loc.font=Font.mediumSystemFont(8);loc.textColor=C(t.secondary);}
+  if(e.url)w.url=e.url;
+  return w;
+}
+
+async function buildDayTimelineWidget(data, opts) {
+  const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
+  addHeader(w,t,"Day Timeline",fmtDate(new Date()),GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  w.addSpacer(7);
+  if(!feed.ok){const x=w.addText("Google Calendar not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  const today=new Date().toDateString();
+  const events=(feed.events||[]).filter(e=>new Date(e.start).toDateString()===today).slice(0,familyRows(2,4,6));
+  if(!events.length){const x=w.addText("No events today.");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  for(const e of events){
+    const row=w.addStack();row.layoutHorizontally();
+    const tm=row.addText(eventTimeLabel(e.start));tm.font=Font.semiboldSystemFont(8);tm.textColor=C(t.accent);
+    row.addSpacer(9);
+    const tx=row.addText(e.title||"Untitled");tx.font=Font.mediumSystemFont(10);tx.textColor=C(t.text);tx.lineLimit=1;
+    if(e.url)row.url=e.url;
+    w.addSpacer(6);
+  }
+  return w;
+}
+
+async function buildWeekCalendarWidget(data, opts) {
+  const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
+  addHeader(w,t,"Week", "GOOGLE CALENDAR", GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  w.addSpacer(8);
+  if(!feed.ok){const x=w.addText("Google Calendar not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  const days=[];
+  for(let i=0;i<7;i++){const d=new Date();d.setDate(d.getDate()+i);days.push(d);}
+  for(const d of days.slice(0,familyRows(3,5,7))){
+    const count=(feed.events||[]).filter(e=>new Date(e.start).toDateString()===d.toDateString()).length;
+    const row=w.addStack();row.layoutHorizontally();
+    const day=row.addText(fmtDate(d,"EEE d"));day.font=Font.mediumSystemFont(9);day.textColor=d.toDateString()===new Date().toDateString()?C(t.accent):C(t.text);
+    row.addSpacer();const c=row.addText(count+" event"+(count===1?"":"s"));c.font=Font.mediumSystemFont(8);c.textColor=C(t.secondary);
+    w.addSpacer(5);
+  }
+  return w;
+}
+
+async function buildUpNextWidget(data, opts) {
+  const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
+  addHeader(w,t,"Up Next",fmtDate(new Date()),scriptURL({action:"open",list:opts.list}));
+  w.addSpacer(8);
+  const e=feed.ok&&feed.events.length?feed.events[0]:null;
+  const task=openTasks(data,opts.list)[0];
+  if(e){
+    const a=w.addText(eventTimeLabel(e.start)+" · "+(e.title||"Calendar"));
+    a.font=Font.mediumSystemFont(10);a.textColor=C(t.text);a.lineLimit=1;if(e.url)a.url=e.url;
+    w.addSpacer(7);
+  }
+  if(task){
+    const b=w.addText("○ "+task.title);b.font=Font.mediumSystemFont(10);b.textColor=C(t.text);b.lineLimit=1;b.url=scriptURL({action:"toggle",id:task.id,list:opts.list});
+  }
+  if(!e&&!task){const x=w.addText("Nothing pressing.");x.font=displayFont(t,14,"regular");x.textColor=C(t.secondary);}
+  return w;
+}
+
+async function buildBriefingWidget(data, opts) {
+  const t=theme(opts.themeName),w=baseWidget(t),feed=await loadGoogleCalendarFeed(),caseFeed=await loadCaseActivityFeed();
+  addHeader(w,t,"Daily Briefing",fmtDate(new Date()),scriptURL({action:"open",list:opts.list}));
+  w.addSpacer(8);
+  const nextEvent=feed.ok&&feed.events.length?feed.events[0]:null;
+  const nextTask=openTasks(data,opts.list)[0];
+  const caseItem=caseFeed.items&&caseFeed.items.length?caseFeed.items[0]:null;
+  const rows=[];
+  if(nextEvent)rows.push(["CAL",eventTimeLabel(nextEvent.start)+" · "+nextEvent.title,nextEvent.url]);
+  if(nextTask)rows.push(["TASK",nextTask.title,scriptURL({action:"toggle",id:nextTask.id,list:opts.list})]);
+  if(caseItem)rows.push(["DRIVE",caseItem.title,caseItem.url]);
+  for(const [k,v,u] of rows.slice(0,familyRows(2,3,4))){
+    const row=w.addStack();row.layoutHorizontally();const a=row.addText(k);a.font=Font.semiboldSystemFont(7);a.textColor=C(t.accent);row.addSpacer(8);const b=row.addText(v);b.font=Font.mediumSystemFont(10);b.textColor=C(t.text);b.lineLimit=1;if(u)row.url=u;w.addSpacer(6);
+  }
+  return w;
+}
+
+function buildPriorityWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),tasks=openTasks(data,opts.list).slice(0,familyRows(1,3,5));
+  addHeader(w,t,"Priority",listTitle(opts.list),scriptURL({action:"open",list:opts.list}));
+  w.addSpacer(8);
+  if(!tasks.length){const x=w.addText("Nothing pressing.");x.font=displayFont(t,14,"regular");x.textColor=C(t.secondary);return w;}
+  tasks.forEach((task,i)=>{const row=w.addStack();row.layoutHorizontally();const n=row.addText(String(i+1).padStart(2,"0"));n.font=Font.semiboldSystemFont(8);n.textColor=C(t.accent);row.addSpacer(8);const tx=row.addText(task.title);tx.font=Font.mediumSystemFont(10);tx.textColor=C(t.text);tx.lineLimit=1;row.url=scriptURL({action:"toggle",id:task.id,list:opts.list});w.addSpacer(6);});
+  return w;
+}
+
+async function buildWorkdayWidget(data,opts){
+  const copy={...opts,list:"business"};return await buildBriefingWidget(data,copy);
+}
+async function buildPersonalDayWidget(data,opts){
+  const copy={...opts,list:"personal"};return await buildBriefingWidget(data,copy);
+}
+
+async function buildCasePulseWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),feed=await loadCaseActivityFeed();
+  addHeader(w,t,"Case Pulse",feed.status||"CONNECTED",feed.links&&feed.links.hub?feed.links.hub:CASE_ACTIVITY_FALLBACK.links.hub);
+  w.addSpacer(8);
+  const items=(feed.items||[]).slice(0,familyRows(1,3,5));
+  const big=w.addText(String(items.length));
+  big.font=displayFont(t,familyFont(30,38,46),"bold");big.textColor=C(t.accent);
+  const label=w.addText("RECENT UPDATES");label.font=Font.mediumSystemFont(7);label.textColor=C(t.secondary);
+  if(widgetFamily()!=="small"){w.addSpacer(8);for(const item of items){const x=w.addText("• "+item.title);x.font=Font.mediumSystemFont(9);x.textColor=C(t.text);x.lineLimit=1;w.addSpacer(5);}}
+  return w;
+}
+
+async function buildSyncStatusWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),feed=await loadCaseActivityFeed();
+  addHeader(w,t,"Sync Status",feed.status||"CONNECTED",feed.links&&feed.links.hub?feed.links.hub:CASE_ACTIVITY_FALLBACK.links.hub);
+  w.addSpacer();
+  const txt=w.addText(feed.updated_at?relativeTimeFromISO(feed.updated_at):"No update time");
+  txt.font=displayFont(t,familyFont(20,28,34),"regular");txt.textColor=C(t.text);
+  const sub=w.addText("LAST ACTIVITY");sub.font=Font.mediumSystemFont(7);sub.textColor=C(t.secondary);
+  w.addSpacer();
+  return w;
+}
+
+function buildBatteryFocusWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),pct=Math.round(Device.batteryLevel()*100);
+  addHeader(w,t,"Battery Focus",fmtTime(new Date()),scriptURL({action:"open",list:opts.list}));
+  w.addSpacer();
+  const big=w.addText(pct+"%");big.font=displayFont(t,familyFont(36,52,62),"bold");big.textColor=C(t.text);
+  const state=Device.isCharging()?"CHARGING":"BATTERY";const sub=w.addText(state);sub.font=Font.mediumSystemFont(8);sub.textColor=C(t.accent);
+  return w;
+}
+
+function buildQuickCaptureWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t);
+  const plus=w.addText("＋");plus.font=displayFont(t,familyFont(38,48,58),"regular");plus.textColor=C(t.accent);
+  const title=w.addText("Quick Capture");title.font=displayFont(t,familyFont(16,20,24),"regular");title.textColor=C(t.text);
+  const sub=w.addText("Add to "+listTitle(opts.list));sub.font=Font.mediumSystemFont(8);sub.textColor=C(t.secondary);
+  w.url=scriptURL({action:"add",list:opts.list});
+  return w;
+}
+
 async function buildWidget(data, opts) {
   if (String(widgetFamily()).startsWith("accessory")) return await buildAccessoryWidget(data, opts);
   if (opts.type === "clock") return buildClockWidget(data, opts);
@@ -2152,6 +2299,18 @@ async function buildWidget(data, opts) {
   if (opts.type === "overview") return buildOverviewWidget(data, opts);
   if (opts.type === "chatgpt") return buildChatGPTWidget(data, opts);
   if (opts.type === "caseactivity") return await buildCaseActivityWidget(opts);
+  if (opts.type === "nextevent") return await buildNextEventWidget(data, opts);
+  if (opts.type === "daytimeline") return await buildDayTimelineWidget(data, opts);
+  if (opts.type === "weekcalendar") return await buildWeekCalendarWidget(data, opts);
+  if (opts.type === "upnext") return await buildUpNextWidget(data, opts);
+  if (opts.type === "briefing") return await buildBriefingWidget(data, opts);
+  if (opts.type === "priority") return buildPriorityWidget(data, opts);
+  if (opts.type === "workday") return await buildWorkdayWidget(data, opts);
+  if (opts.type === "personalday") return await buildPersonalDayWidget(data, opts);
+  if (opts.type === "casepulse") return await buildCasePulseWidget(data, opts);
+  if (opts.type === "syncstatus") return await buildSyncStatusWidget(data, opts);
+  if (opts.type === "batteryfocus") return buildBatteryFocusWidget(data, opts);
+  if (opts.type === "quickcapture") return buildQuickCaptureWidget(data, opts);
   return buildTasksWidget(data, opts);
 }
 
