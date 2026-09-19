@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "2.3.0";
+const VERSION = "3.0.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -57,7 +57,12 @@ const THEMES = {
   }
 };
 
-const TYPES = ["tasks", "clock", "agenda", "dashboard", "focus", "status", "compact"];
+const TYPES = [
+  "tasks", "clock", "agenda", "dashboard", "focus", "status", "compact",
+  "today", "split", "weekly", "progress", "morning", "night", "followup",
+  "calendar", "minimalclock", "utility", "controlcenter", "launcher",
+  "note", "quickadd", "completed", "essentials", "countdown", "overview"
+];
 
 function C(hex, alpha) {
   return new Color(hex, alpha == null ? 1 : alpha);
@@ -784,6 +789,536 @@ function buildCompactWidget(data, opts) {
   return w;
 }
 
+
+function dueTodayTasks(data, list) {
+  const today = new Date().toDateString();
+  return openTasks(data, list).filter(t => t.due && new Date(t.due).toDateString() === today);
+}
+
+function dueTomorrowTasks(data, list) {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const tomorrow = d.toDateString();
+  return openTasks(data, list).filter(t => t.due && new Date(t.due).toDateString() === tomorrow);
+}
+
+function allCompleted(data, list) {
+  return data.tasks
+    .filter(t => t.list === list && t.completed)
+    .sort((a,b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
+}
+
+function relativeDue(iso) {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "DUE";
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins + "m";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + "h " + (mins % 60) + "m";
+  return Math.floor(hrs / 24) + "d";
+}
+
+function addSimpleTaskRows(w, t, tasks, list, maxRows) {
+  for (const task of tasks.slice(0, maxRows)) {
+    const row = w.addStack();
+    row.layoutHorizontally();
+    row.centerAlignContent();
+    row.url = scriptURL({ action: "toggle", id: task.id, list });
+
+    const bullet = row.addText("○");
+    bullet.font = Font.regularSystemFont(13);
+    bullet.textColor = C(t.accent);
+
+    row.addSpacer(7);
+
+    const tx = row.addText(task.title);
+    tx.font = Font.mediumSystemFont(11);
+    tx.textColor = C(t.text);
+    tx.lineLimit = 1;
+    tx.minimumScaleFactor = 0.7;
+
+    row.addSpacer();
+
+    if (task.due) {
+      const due = row.addText(relativeDue(task.due));
+      due.font = Font.mediumSystemFont(7);
+      due.textColor = C(t.secondary);
+    }
+
+    w.addSpacer(5);
+  }
+}
+
+function buildTodayWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const todays = dueTodayTasks(data, opts.list);
+  const source = todays.length ? todays : openTasks(data, opts.list);
+
+  addHeader(w, t, "Today", fmtDate(new Date(), "EEEE · MMM d"), scriptURL({ action: "open", list: opts.list }));
+  addGradientDivider(w, t, 6);
+  addSimpleTaskRows(w, t, source, opts.list, (config.widgetFamily || "medium") === "large" ? 6 : 4);
+
+  w.addSpacer();
+  const footer = w.addStack();
+  footer.layoutHorizontally();
+  const left = footer.addText(source.length + " ACTIVE");
+  left.font = Font.mediumSystemFont(8);
+  left.textColor = C(t.faint);
+  footer.addSpacer();
+  const right = footer.addText(completedToday(data, opts.list) + " DONE");
+  right.font = Font.mediumSystemFont(8);
+  right.textColor = C(t.faint);
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildSplitWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+
+  addHeader(w, t, "Personal / Business", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(9);
+
+  const row = w.addStack();
+  row.layoutHorizontally();
+
+  const personal = addCard(row, t, 10);
+  personal.layoutVertically();
+  const pTitle = personal.addText("Personal");
+  pTitle.font = displayFont(t, 16, "regular");
+  pTitle.textColor = C(t.text);
+  const pCount = personal.addText(openTasks(data, "personal").length + " open");
+  pCount.font = Font.mediumSystemFont(8);
+  pCount.textColor = C(t.secondary);
+
+  row.addSpacer(8);
+
+  const business = addCard(row, t, 10);
+  business.layoutVertically();
+  const bTitle = business.addText("Business");
+  bTitle.font = displayFont(t, 16, "regular");
+  bTitle.textColor = C(t.text);
+  const bCount = business.addText(openTasks(data, "business").length + " open");
+  bCount.font = Font.mediumSystemFont(8);
+  bCount.textColor = C(t.secondary);
+
+  w.addSpacer(10);
+
+  const nextP = openTasks(data, "personal")[0];
+  const nextB = openTasks(data, "business")[0];
+  if (nextP) {
+    const r = w.addStack(); r.layoutHorizontally();
+    const l = r.addText("P"); l.font = Font.semiboldSystemFont(8); l.textColor = C(t.accent);
+    r.addSpacer(8);
+    const x = r.addText(nextP.title); x.font = Font.mediumSystemFont(10); x.textColor = C(t.text); x.lineLimit = 1;
+    r.url = scriptURL({ action: "toggle", id: nextP.id, list: "personal" });
+    w.addSpacer(5);
+  }
+  if (nextB) {
+    const r = w.addStack(); r.layoutHorizontally();
+    const l = r.addText("B"); l.font = Font.semiboldSystemFont(8); l.textColor = C(t.accent);
+    r.addSpacer(8);
+    const x = r.addText(nextB.title); x.font = Font.mediumSystemFont(10); x.textColor = C(t.text); x.lineLimit = 1;
+    r.url = scriptURL({ action: "toggle", id: nextB.id, list: "business" });
+  }
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildWeeklyWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Week", "NEXT 7 DAYS", scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(10);
+
+  const strip = w.addStack();
+  strip.layoutHorizontally();
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const day = strip.addStack();
+    day.layoutVertically();
+    day.centerAlignContent();
+
+    const label = day.addText(fmtDate(d, "EE").toUpperCase());
+    label.font = Font.mediumSystemFont(7);
+    label.textColor = C(t.secondary);
+
+    const number = day.addText(fmtDate(d, "d"));
+    number.font = displayFont(t, 15, "regular");
+    number.textColor = C(t.text);
+
+    const count = openTasks(data, opts.list).filter(x => x.due && new Date(x.due).toDateString() === d.toDateString()).length;
+    const c = day.addText(count ? String(count) : "·");
+    c.font = Font.semiboldSystemFont(8);
+    c.textColor = count ? C(t.accent) : C(t.faint);
+
+    if (i < 6) strip.addSpacer();
+  }
+
+  w.addSpacer(12);
+  addSimpleTaskRows(w, t, openTasks(data, opts.list).filter(x => x.due), opts.list, 2);
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildProgressWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const listTasks = data.tasks.filter(x => x.list === opts.list);
+  const done = listTasks.filter(x => x.completed).length;
+  const total = listTasks.length;
+  const pct = total ? Math.round((done / total) * 100) : 100;
+
+  addHeader(w, t, "Progress", listTitle(opts.list), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(10);
+
+  const big = w.addText(pct + "%");
+  big.font = displayFont(t, (config.widgetFamily || "medium") === "small" ? 34 : 48, "bold");
+  big.textColor = C(t.text);
+
+  const bar = w.addStack();
+  bar.size = new Size(0, 5);
+  bar.backgroundColor = C(t.panel2);
+  bar.cornerRadius = 3;
+
+  const fill = bar.addStack();
+  fill.size = new Size(Math.max(10, 250 * pct / 100), 5);
+  fill.backgroundColor = C(t.accent);
+  fill.cornerRadius = 3;
+
+  w.addSpacer(8);
+  const meta = w.addText(done + " COMPLETED · " + openTasks(data, opts.list).length + " OPEN");
+  meta.font = Font.mediumSystemFont(8);
+  meta.textColor = C(t.secondary);
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildMorningWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const h = new Date().getHours();
+  const greeting = h < 12 ? "Good morning" : "Day plan";
+
+  const g = w.addText(greeting);
+  g.font = displayFont(t, 25, "regular");
+  g.textColor = C(t.text);
+
+  const date = w.addText(fmtDate(new Date(), "EEEE · MMM d"));
+  date.font = Font.mediumSystemFont(8);
+  date.textColor = C(t.secondary);
+
+  w.addSpacer(10);
+
+  const time = w.addText(fmtTime(new Date()));
+  time.font = displayFont(t, 34, "bold");
+  time.textColor = C(t.text);
+
+  w.addSpacer(10);
+  addSimpleTaskRows(w, t, openTasks(data, opts.list), opts.list, 3);
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildNightWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Tomorrow", "NIGHT RESET", scriptURL({ action: "open", list: opts.list }));
+  addGradientDivider(w, t, 6);
+
+  const tomorrow = dueTomorrowTasks(data, opts.list);
+  const source = tomorrow.length ? tomorrow : openTasks(data, opts.list);
+
+  addSimpleTaskRows(w, t, source, opts.list, 4);
+  w.addSpacer();
+  const done = w.addText(completedToday(data, opts.list) + " completed today");
+  done.font = Font.mediumSystemFont(8);
+  done.textColor = C(t.faint);
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildFollowupWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Follow Ups", "BUSINESS", scriptURL({ action: "open", list: "business" }));
+  addGradientDivider(w, t, 6);
+
+  const rx = /(follow|call|email|text|reply|check|contact|send|reach)/i;
+  let tasks = openTasks(data, "business").filter(x => rx.test(x.title));
+  if (!tasks.length) tasks = openTasks(data, "business");
+
+  addSimpleTaskRows(w, t, tasks, "business", 5);
+  w.url = scriptURL({ action: "open", list: "business" });
+  return w;
+}
+
+function buildCalendarWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, fmtDate(new Date(), "MMMM"), fmtDate(new Date(), "yyyy"), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(9);
+
+  const strip = w.addStack();
+  strip.layoutHorizontally();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const cell = strip.addStack();
+    cell.layoutVertically();
+    cell.centerAlignContent();
+    const a = cell.addText(fmtDate(d, "E").slice(0,1));
+    a.font = Font.mediumSystemFont(7);
+    a.textColor = C(t.secondary);
+    const b = cell.addText(fmtDate(d, "d"));
+    b.font = displayFont(t, 14, "regular");
+    b.textColor = i === 0 ? C(t.accent) : C(t.text);
+    if (i < 6) strip.addSpacer();
+  }
+
+  w.addSpacer(12);
+  const due = openTasks(data, opts.list).filter(x => x.due);
+  addSimpleTaskRows(w, t, due.length ? due : openTasks(data, opts.list), opts.list, 3);
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildMinimalClockWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const family = config.widgetFamily || "medium";
+
+  const date = w.addText(fmtDate(new Date(), "EEEE, MMMM d").toUpperCase());
+  date.font = Font.mediumSystemFont(8);
+  date.textColor = C(t.secondary);
+
+  w.addSpacer(family === "small" ? 4 : 8);
+
+  const time = w.addText(fmtTime(new Date()));
+  time.font = displayFont(t, family === "small" ? 40 : 60, "bold");
+  time.textColor = C(t.text);
+  time.minimumScaleFactor = 0.65;
+
+  w.addSpacer();
+
+  const meta = w.addText(openTasks(data, "personal").length + " PERSONAL · " + openTasks(data, "business").length + " BUSINESS");
+  meta.font = Font.mediumSystemFont(7);
+  meta.textColor = C(t.faint);
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildUtilityWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Utility", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(8);
+
+  const row1 = w.addStack(); row1.layoutHorizontally();
+  const a = addCard(row1, t, 9); addMetric(a, t, Math.round(Device.batteryLevel() * 100) + "%", "Battery", true);
+  row1.addSpacer(8);
+  const b = addCard(row1, t, 9); addMetric(b, t, fmtTime(new Date()), "Time", true);
+
+  w.addSpacer(8);
+
+  const row2 = w.addStack(); row2.layoutHorizontally();
+  const c = addCard(row2, t, 9); addMetric(c, t, openTasks(data, "personal").length, "Personal", false);
+  row2.addSpacer(8);
+  const d = addCard(row2, t, 9); addMetric(d, t, openTasks(data, "business").length, "Business", false);
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildControlCenterWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Control Center", "NAVI OS", scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(8);
+
+  const grid1 = w.addStack(); grid1.layoutHorizontally();
+  const time = addCard(grid1, t, 9); addMetric(time, t, fmtTime(new Date()), "Time", false);
+  grid1.addSpacer(8);
+  const battery = addCard(grid1, t, 9); addMetric(battery, t, Math.round(Device.batteryLevel() * 100) + "%", "Battery", false);
+  grid1.addSpacer(8);
+  const open = addCard(grid1, t, 9); addMetric(open, t, openTasks(data, opts.list).length, "Open", false);
+
+  w.addSpacer(8);
+
+  const grid2 = w.addStack(); grid2.layoutHorizontally();
+  const p = addCard(grid2, t, 9); addMetric(p, t, openTasks(data, "personal").length, "Personal", false);
+  grid2.addSpacer(8);
+  const b = addCard(grid2, t, 9); addMetric(b, t, openTasks(data, "business").length, "Business", false);
+  grid2.addSpacer(8);
+  const done = addCard(grid2, t, 9); addMetric(done, t, completedToday(data, opts.list), "Done", false);
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildLauncherWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Launcher", "NAVI OS", scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(9);
+
+  const actions = [
+    ["＋", "Add Personal", scriptURL({ action: "add", list: "personal" })],
+    ["＋", "Add Business", scriptURL({ action: "add", list: "business" })],
+    ["○", "Personal Tasks", scriptURL({ action: "open", list: "personal" })],
+    ["□", "Business Tasks", scriptURL({ action: "open", list: "business" })]
+  ];
+
+  for (const item of actions) {
+    const row = addCard(w, t, 8);
+    row.layoutHorizontally();
+    row.url = item[2];
+    const icon = row.addText(item[0]); icon.font = Font.semiboldSystemFont(11); icon.textColor = C(t.accent);
+    row.addSpacer(8);
+    const label = row.addText(item[1]); label.font = Font.mediumSystemFont(10); label.textColor = C(t.text);
+    row.addSpacer();
+    w.addSpacer(6);
+  }
+
+  return w;
+}
+
+function buildNoteWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Daily Note", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(12);
+
+  const source = openTasks(data, opts.list)[0];
+  const quote = source ? source.title : "Nothing pressing. Keep the day clear.";
+
+  const note = w.addText(quote);
+  note.font = displayFont(t, 22, "regular");
+  note.textColor = C(t.text);
+  note.lineLimit = 4;
+  note.minimumScaleFactor = 0.72;
+
+  w.addSpacer();
+
+  const foot = w.addText(listTitle(opts.list).toUpperCase());
+  foot.font = Font.mediumSystemFont(7);
+  foot.textColor = C(t.faint);
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildQuickAddWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Quick Add", "ONE TAP", scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(10);
+
+  const p = addCard(w, t, 12);
+  p.layoutHorizontally();
+  p.url = scriptURL({ action: "add", list: "personal" });
+  const p1 = p.addText("＋"); p1.font = Font.semiboldSystemFont(14); p1.textColor = C(t.accent);
+  p.addSpacer(10);
+  const p2 = p.addText("Personal task"); p2.font = Font.mediumSystemFont(12); p2.textColor = C(t.text);
+
+  w.addSpacer(8);
+
+  const b = addCard(w, t, 12);
+  b.layoutHorizontally();
+  b.url = scriptURL({ action: "add", list: "business" });
+  const b1 = b.addText("＋"); b1.font = Font.semiboldSystemFont(14); b1.textColor = C(t.accent);
+  b.addSpacer(10);
+  const b2 = b.addText("Business task"); b2.font = Font.mediumSystemFont(12); b2.textColor = C(t.text);
+
+  return w;
+}
+
+function buildCompletedWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Completed", listTitle(opts.list), scriptURL({ action: "open", list: opts.list }));
+  addGradientDivider(w, t, 6);
+
+  const done = allCompleted(data, opts.list);
+  if (!done.length) {
+    const empty = w.addText("Nothing completed yet.");
+    empty.font = Font.regularSystemFont(11);
+    empty.textColor = C(t.secondary);
+  } else {
+    for (const task of done.slice(0, 5)) {
+      const row = w.addStack(); row.layoutHorizontally();
+      const check = row.addText("✓"); check.font = Font.mediumSystemFont(11); check.textColor = C(t.accent);
+      row.addSpacer(8);
+      const tx = row.addText(task.title); tx.font = Font.mediumSystemFont(10); tx.textColor = C(t.secondary); tx.lineLimit = 1;
+      row.addSpacer();
+      w.addSpacer(5);
+    }
+  }
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
+function buildEssentialsWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Essentials", "PERSONAL", scriptURL({ action: "open", list: "personal" }));
+  addGradientDivider(w, t, 6);
+  addSimpleTaskRows(w, t, openTasks(data, "personal"), "personal", 5);
+  w.url = scriptURL({ action: "open", list: "personal" });
+  return w;
+}
+
+function buildCountdownWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const next = openTasks(data, opts.list).find(x => x.due);
+
+  addHeader(w, t, "Countdown", listTitle(opts.list), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(12);
+
+  if (!next) {
+    const clear = w.addText("No timed task.");
+    clear.font = displayFont(t, 20, "regular");
+    clear.textColor = C(t.secondary);
+  } else {
+    const time = w.addText(relativeDue(next.due));
+    time.font = displayFont(t, 46, "bold");
+    time.textColor = C(t.text);
+    w.addSpacer(6);
+    const title = w.addText(next.title);
+    title.font = Font.mediumSystemFont(11);
+    title.textColor = C(t.secondary);
+    title.lineLimit = 2;
+    w.url = scriptURL({ action: "toggle", id: next.id, list: opts.list });
+  }
+  return w;
+}
+
+function buildOverviewWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  addHeader(w, t, "Overview", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(8);
+
+  const row = w.addStack(); row.layoutHorizontally();
+  const p = addCard(row, t, 10); addMetric(p, t, openTasks(data, "personal").length, "Personal", true);
+  row.addSpacer(8);
+  const b = addCard(row, t, 10); addMetric(b, t, openTasks(data, "business").length, "Business", true);
+
+  w.addSpacer(9);
+  addSimpleTaskRows(w, t, openTasks(data, opts.list), opts.list, 3);
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  return w;
+}
+
 function buildWidget(data, opts) {
   if (opts.type === "clock") return buildClockWidget(data, opts);
   if (opts.type === "agenda") return buildAgendaWidget(data, opts);
@@ -791,6 +1326,24 @@ function buildWidget(data, opts) {
   if (opts.type === "focus") return buildFocusWidget(data, opts);
   if (opts.type === "status") return buildStatusWidget(data, opts);
   if (opts.type === "compact") return buildCompactWidget(data, opts);
+  if (opts.type === "today") return buildTodayWidget(data, opts);
+  if (opts.type === "split") return buildSplitWidget(data, opts);
+  if (opts.type === "weekly") return buildWeeklyWidget(data, opts);
+  if (opts.type === "progress") return buildProgressWidget(data, opts);
+  if (opts.type === "morning") return buildMorningWidget(data, opts);
+  if (opts.type === "night") return buildNightWidget(data, opts);
+  if (opts.type === "followup") return buildFollowupWidget(data, opts);
+  if (opts.type === "calendar") return buildCalendarWidget(data, opts);
+  if (opts.type === "minimalclock") return buildMinimalClockWidget(data, opts);
+  if (opts.type === "utility") return buildUtilityWidget(data, opts);
+  if (opts.type === "controlcenter") return buildControlCenterWidget(data, opts);
+  if (opts.type === "launcher") return buildLauncherWidget(data, opts);
+  if (opts.type === "note") return buildNoteWidget(data, opts);
+  if (opts.type === "quickadd") return buildQuickAddWidget(data, opts);
+  if (opts.type === "completed") return buildCompletedWidget(data, opts);
+  if (opts.type === "essentials") return buildEssentialsWidget(data, opts);
+  if (opts.type === "countdown") return buildCountdownWidget(data, opts);
+  if (opts.type === "overview") return buildOverviewWidget(data, opts);
   return buildTasksWidget(data, opts);
 }
 
@@ -800,13 +1353,13 @@ async function chooseHomeWidget(data, state) {
   const typeAlert = new Alert();
   typeAlert.title = "Home Widget";
   typeAlert.message = "Choose what your NaviOS widget shows.";
-  typeAlert.addAction("Tasks");
-  typeAlert.addAction("Clock");
-  typeAlert.addAction("Agenda");
-  typeAlert.addAction("Dashboard");
-  typeAlert.addAction("Focus");
-  typeAlert.addAction("Status");
-  typeAlert.addAction("Compact");
+  [
+    "Tasks", "Clock", "Agenda", "Dashboard", "Focus", "Status", "Compact",
+    "Today", "Personal / Business", "Weekly", "Progress", "Morning", "Night",
+    "Follow Ups", "Calendar", "Minimal Clock", "Utility", "Control Center",
+    "Launcher", "Daily Note", "Quick Add", "Completed", "Essentials",
+    "Countdown", "Overview"
+  ].forEach(name => typeAlert.addAction(name));
   typeAlert.addCancelAction("Cancel");
   const typeIndex = await typeAlert.present();
   if (typeIndex < 0) return false;
@@ -855,13 +1408,13 @@ async function previewWidget(data, state) {
   const a = new Alert();
   a.title = "Preview Widget";
   a.message = "Choose a widget type.";
-  a.addAction("Tasks");
-  a.addAction("Clock");
-  a.addAction("Agenda");
-  a.addAction("Dashboard");
-  a.addAction("Focus");
-  a.addAction("Status");
-  a.addAction("Compact");
+  [
+    "Tasks", "Clock", "Agenda", "Dashboard", "Focus", "Status", "Compact",
+    "Today", "Personal / Business", "Weekly", "Progress", "Morning", "Night",
+    "Follow Ups", "Calendar", "Minimal Clock", "Utility", "Control Center",
+    "Launcher", "Daily Note", "Quick Add", "Completed", "Essentials",
+    "Countdown", "Overview"
+  ].forEach(name => a.addAction(name));
   a.addCancelAction("Cancel");
   const typeIndex = await a.present();
   if (typeIndex < 0) return;
