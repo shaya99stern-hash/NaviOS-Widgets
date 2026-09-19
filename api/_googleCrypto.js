@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 
 function secretKey(){
-  const raw=process.env.GOOGLE_SESSION_SECRET||"";
-  if(!raw) throw new Error("GOOGLE_SESSION_SECRET missing");
+  const raw=process.env.GOOGLE_SESSION_SECRET||process.env.GOOGLE_CLIENT_SECRET||"";
+  if(!raw) throw new Error("Google secret missing");
   return crypto.createHash("sha256").update(raw).digest();
 }
 export function seal(payload){
