@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.1.1";
+const VERSION = "3.2.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -1493,6 +1493,149 @@ function buildOverviewWidget(data, opts) {
   return w;
 }
 
+
+function chatGPTURL(prompt) {
+  const encoded = encodeURIComponent(prompt || "");
+  return "com.openai.chat://chatgpt.com/?prompt=" + encoded;
+}
+
+async function dictateToChatGPT() {
+  const spoken = await Dictation.start("en");
+  const text = String(spoken || "").trim();
+  if (!text) return false;
+
+  try { Pasteboard.copyString(text); } catch (_) {}
+
+  Safari.open(chatGPTURL(text));
+  return true;
+}
+
+async function typeToChatGPT() {
+  const a = new Alert();
+  a.title = "Ask ChatGPT";
+  a.addTextField("Ask anything", "");
+  a.addAction("Open in ChatGPT");
+  a.addCancelAction("Cancel");
+  const result = await a.present();
+  if (result < 0) return false;
+
+  const text = a.textFieldValue(0).trim();
+  if (!text) return false;
+
+  try { Pasteboard.copyString(text); } catch (_) {}
+
+  Safari.open(chatGPTURL(text));
+  return true;
+}
+
+function buildChatGPTWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const family = widgetFamily();
+  const w = baseWidget(t);
+
+  if (family === "small") {
+    const logo = w.addText("◎");
+    logo.font = displayFont(t, 30, "regular");
+    logo.textColor = C(t.accent);
+
+    w.addSpacer(6);
+
+    const title = w.addText("Ask ChatGPT");
+    title.font = displayFont(t, 18, "regular");
+    title.textColor = C(t.text);
+
+    w.addSpacer();
+
+    const mic = w.addText("MIC · DICTATE");
+    mic.font = Font.semiboldSystemFont(8);
+    mic.textColor = C(t.secondary);
+    mic.url = scriptURL({ action: "chatgptDictate" });
+
+    w.url = scriptURL({ action: "chatgptDictate" });
+    return w;
+  }
+
+  const top = w.addStack();
+  top.layoutHorizontally();
+  top.centerAlignContent();
+
+  const logo = top.addText("◎");
+  logo.font = displayFont(t, family === "large" ? 28 : 24, "regular");
+  logo.textColor = C(t.accent);
+
+  top.addSpacer(9);
+
+  const title = top.addText("Ask ChatGPT");
+  title.font = displayFont(t, family === "large" ? 25 : 21, "regular");
+  title.textColor = C(t.text);
+
+  top.addSpacer();
+
+  const mic = top.addText("●");
+  mic.font = Font.mediumSystemFont(12);
+  mic.textColor = C(t.accent);
+  mic.url = scriptURL({ action: "chatgptDictate" });
+
+  w.addSpacer(11);
+
+  const actions = w.addStack();
+  actions.layoutHorizontally();
+
+  const dictate = addCard(actions, t, 10);
+  dictate.layoutVertically();
+  dictate.url = scriptURL({ action: "chatgptDictate" });
+  const d1 = dictate.addText("MIC");
+  d1.font = Font.semiboldSystemFont(8);
+  d1.textColor = C(t.secondary);
+  const d2 = dictate.addText("Dictate");
+  d2.font = displayFont(t, family === "large" ? 18 : 15, "regular");
+  d2.textColor = C(t.text);
+
+  actions.addSpacer(8);
+
+  const ask = addCard(actions, t, 10);
+  ask.layoutVertically();
+  ask.url = scriptURL({ action: "chatgptType" });
+  const a1 = ask.addText("TEXT");
+  a1.font = Font.semiboldSystemFont(8);
+  a1.textColor = C(t.secondary);
+  const a2 = ask.addText("Ask");
+  a2.font = displayFont(t, family === "large" ? 18 : 15, "regular");
+  a2.textColor = C(t.text);
+
+  if (family === "large") {
+    w.addSpacer(8);
+
+    const lower = w.addStack();
+    lower.layoutHorizontally();
+
+    const camera = addCard(lower, t, 10);
+    camera.layoutVertically();
+    camera.url = "com.openai.chat://";
+    const c1 = camera.addText("CAMERA");
+    c1.font = Font.semiboldSystemFont(8);
+    c1.textColor = C(t.secondary);
+    const c2 = camera.addText("Open ChatGPT");
+    c2.font = Font.mediumSystemFont(11);
+    c2.textColor = C(t.text);
+
+    lower.addSpacer(8);
+
+    const drive = addCard(lower, t, 10);
+    drive.layoutVertically();
+    drive.url = "https://drive.google.com/drive/u/0/my-drive";
+    const g1 = drive.addText("DRIVE");
+    g1.font = Font.semiboldSystemFont(8);
+    g1.textColor = C(t.secondary);
+    const g2 = drive.addText("Open files");
+    g2.font = Font.mediumSystemFont(11);
+    g2.textColor = C(t.text);
+  }
+
+  w.url = scriptURL({ action: "chatgptDictate" });
+  return w;
+}
+
 function buildWidget(data, opts) {
   if (opts.type === "clock") return buildClockWidget(data, opts);
   if (opts.type === "agenda") return buildAgendaWidget(data, opts);
@@ -1518,6 +1661,7 @@ function buildWidget(data, opts) {
   if (opts.type === "essentials") return buildEssentialsWidget(data, opts);
   if (opts.type === "countdown") return buildCountdownWidget(data, opts);
   if (opts.type === "overview") return buildOverviewWidget(data, opts);
+  if (opts.type === "chatgpt") return buildChatGPTWidget(data, opts);
   return buildTasksWidget(data, opts);
 }
 
@@ -1532,7 +1676,7 @@ async function chooseHomeWidget(data, state) {
     "Today", "Personal / Business", "Weekly", "Progress", "Morning", "Night",
     "Follow Ups", "Calendar", "Minimal Clock", "Utility", "Control Center",
     "Launcher", "Daily Note", "Quick Add", "Completed", "Essentials",
-    "Countdown", "Overview"
+    "Countdown", "Overview", "ChatGPT"
   ].forEach(name => typeAlert.addAction(name));
   typeAlert.addCancelAction("Cancel");
   const typeIndex = await typeAlert.present();
@@ -1587,7 +1731,7 @@ async function previewWidget(data, state) {
     "Today", "Personal / Business", "Weekly", "Progress", "Morning", "Night",
     "Follow Ups", "Calendar", "Minimal Clock", "Utility", "Control Center",
     "Launcher", "Daily Note", "Quick Add", "Completed", "Essentials",
-    "Countdown", "Overview"
+    "Countdown", "Overview", "ChatGPT"
   ].forEach(name => a.addAction(name));
   a.addCancelAction("Cancel");
   const typeIndex = await a.present();
@@ -1788,6 +1932,16 @@ async function handleAction(data) {
     saved.addAction("Done");
     await saved.present();
     return { list: next.list, reopen: false };
+  }
+
+  if (action === "chatgptDictate") {
+    await dictateToChatGPT();
+    return { list, reopen: false };
+  }
+
+  if (action === "chatgptType") {
+    await typeToChatGPT();
+    return { list, reopen: false };
   }
 
   if (action === "toggle" && q.id) {
