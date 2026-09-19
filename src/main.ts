@@ -1,7 +1,7 @@
 import './styles.css';
 
 type Screen='home'|'widgets'|'sets'|'lock';
-type WidgetType='tasks'|'clock'|'agenda'|'dashboard'|'focus'|'status'|'compact'|'today'|'split'|'weekly'|'progress'|'morning'|'night'|'followup'|'calendar'|'minimalclock'|'utility'|'controlcenter'|'launcher'|'note'|'quickadd'|'completed'|'essentials'|'countdown'|'overview'|'chatgpt'|'caseactivity';
+type WidgetType='tasks'|'clock'|'agenda'|'dashboard'|'focus'|'status'|'compact'|'today'|'split'|'weekly'|'progress'|'morning'|'night'|'followup'|'calendar'|'minimalclock'|'utility'|'controlcenter'|'launcher'|'note'|'quickadd'|'completed'|'essentials'|'countdown'|'overview'|'chatgpt'|'caseactivity'|'nextevent'|'daytimeline'|'weekcalendar'|'upnext'|'briefing'|'priority'|'workday'|'personalday'|'casepulse'|'syncstatus'|'batteryfocus'|'quickcapture';
 type ListType='personal'|'business';
 type ThemeType='graphite'|'editorial'|'noir'|'glass'|'stone'|'luxe'|'edgeglow'|'matrix'|'softglass'|'copper';
 type Family='all'|'minimal'|'dashboard'|'editorial'|'luxe'|'utility';
@@ -64,7 +64,19 @@ const widgetTypes:Array<[WidgetType,string,string,string]> = [
   ['countdown','Countdown','Time remaining to next timed task','⌛'],
   ['overview','Overview','Personal + Business summary','◎'],
   ['chatgpt','ChatGPT','Dictate, ask, and open connected files','✦'],
-  ['caseactivity','Case Activity','Live Drive updates, recent changes, and working status','▣']
+  ['caseactivity','Case Activity','Live Drive updates, recent changes, and working status','▣'],
+  ['nextevent','Next Event','Your next Google Calendar event','→'],
+  ['daytimeline','Day Timeline','Today’s Google Calendar timeline','│'],
+  ['weekcalendar','Week Calendar','Seven-day Google Calendar overview','7'],
+  ['upnext','Up Next','Next calendar event plus next task','↗'],
+  ['briefing','Daily Briefing','Calendar, tasks, and activity in one view','☰'],
+  ['priority','Priority','Top open tasks only','!'],
+  ['workday','Workday','Business tasks + Google Calendar + activity','W'],
+  ['personalday','Personal Day','Personal tasks + Google Calendar + activity','P'],
+  ['casepulse','Case Pulse','Compact recent activity pulse','◉'],
+  ['syncstatus','Sync Status','Latest case-feed refresh status','↻'],
+  ['batteryfocus','Battery Focus','Large battery and charging status','⚡'],
+  ['quickcapture','Quick Capture','Fast local task capture','＋']
 ];
 
 const sets:SetPreset[] = [
@@ -148,7 +160,8 @@ const state={
   list:(localStorage.getItem('navios-list') as ListType)||'personal',
   theme:(localStorage.getItem('navios-theme') as ThemeType)||'graphite',
   set:(localStorage.getItem('navios-set') as SetId)||'slate',
-  family:(localStorage.getItem('navios-family') as Family)||'all'
+  family:(localStorage.getItem('navios-family') as Family)||'all',
+  slot:Math.max(1,Math.min(12,Number(localStorage.getItem('navios-slot')||'1')))
 };
 
 function saveState(){
@@ -158,14 +171,33 @@ function saveState(){
   localStorage.setItem('navios-theme',state.theme);
   localStorage.setItem('navios-set',state.set);
   localStorage.setItem('navios-family',state.family);
+  localStorage.setItem('navios-slot',String(state.slot));
+  localStorage.setItem('navios-slot-'+state.slot,JSON.stringify({type:state.type,list:state.list,theme:state.theme}));
 }
 
 function activeSet(){return sets.find(item=>item.id===state.set)||sets[0];}
 
+function loadSlot(slot:number){
+  state.slot=slot;
+  const raw=localStorage.getItem('navios-slot-'+slot);
+  if(raw){
+    try{
+      const saved=JSON.parse(raw);
+      if(saved.type)state.type=saved.type as WidgetType;
+      if(saved.list)state.list=saved.list as ListType;
+      if(saved.theme)state.theme=saved.theme as ThemeType;
+    }catch{}
+  }
+  saveState();
+}
+function slotStrip(){
+  return '<div class="slot-strip">'+Array.from({length:12},(_,i)=>i+1).map(n=>'<button class="'+(state.slot===n?'active':'')+'" data-slot="'+n+'"><span>SLOT</span><b>'+n+'</b></button>').join('')+'</div>';
+}
+
 function applyWidget(){
   saveState();
   const url='scriptable:///run?scriptName=NaviOS&action=configure&type='+
-    encodeURIComponent(state.type)+'&list='+encodeURIComponent(state.list)+'&theme='+encodeURIComponent(state.theme);
+    encodeURIComponent(state.type)+'&list='+encodeURIComponent(state.list)+'&theme='+encodeURIComponent(state.theme)+'&slot=slot'+state.slot;
   window.location.href=url;
 }
 
@@ -206,7 +238,7 @@ function downloadWallpaper(kind:'home'|'lock'){
 const widgetWorks:Record<WidgetType,{source:string;action:string;home:string;lock:string;note?:string}> = {
   tasks:{source:'Local Scriptable task store',action:'Open list; task rows can complete/reopen tasks',home:'Small · Medium · Large',lock:'Inline · Circular · Rectangular'},
   clock:{source:'iPhone device time/date',action:'Open configured list',home:'Small · Medium · Large',lock:'Time summary'},
-  agenda:{source:'Local tasks with due dates',action:'Open or toggle local tasks',home:'Small · Medium · Large',lock:'Next local due item',note:'Not Apple Calendar yet'},
+  agenda:{source:'Google Calendar via private Vercel feed',action:'Open or toggle local tasks',home:'Small · Medium · Large',lock:'Next local due item'},
   dashboard:{source:'Device time + local task counts',action:'Open manager',home:'Small · Medium · Large',lock:'Compact counts'},
   focus:{source:'Next open local task',action:'Open/toggle focus task where applicable',home:'Small · Medium · Large',lock:'Next task text'},
   status:{source:'Device battery + time + local task counts',action:'Open manager',home:'Small · Medium · Large',lock:'Battery/count summary'},
@@ -218,7 +250,7 @@ const widgetWorks:Record<WidgetType,{source:string;action:string;home:string;loc
   morning:{source:'Device time/date + first local tasks',action:'Open manager',home:'Small · Medium · Large',lock:'Morning/open summary'},
   night:{source:'Tomorrow-due local tasks + done-today count',action:'Open manager',home:'Small · Medium · Large',lock:'Done/tomorrow summary'},
   followup:{source:'Business tasks matched by follow/call/email/text/reply/contact/send',action:'Open Business list',home:'Small · Medium · Large',lock:'Next follow-up'},
-  calendar:{source:'Local task due dates',action:'Open manager',home:'Small · Medium · Large',lock:'Next local due item',note:'Not Apple Calendar yet'},
+  calendar:{source:'Google Calendar via private Vercel feed',action:'Open manager',home:'Small · Medium · Large',lock:'Next local due item',note:'Not Apple Calendar yet'},
   minimalclock:{source:'Device time/date + local counts',action:'Open manager',home:'Small · Medium · Large',lock:'Time'},
   utility:{source:'Device battery + time + local list counts',action:'Open manager',home:'Small · Medium · Large',lock:'Compact status'},
   controlcenter:{source:'Device time/battery + local task stats',action:'Open manager',home:'Small · Medium · Large',lock:'Compact status'},
@@ -230,7 +262,19 @@ const widgetWorks:Record<WidgetType,{source:string;action:string;home:string;loc
   countdown:{source:'Next local task with a due date',action:'Open/toggle timed task',home:'Small · Medium · Large',lock:'Remaining-time summary'},
   overview:{source:'Local Personal/Business counts',action:'Open manager',home:'Small · Medium · Large',lock:'Counts'},
   chatgpt:{source:'Scriptable Dictation / typed input + ChatGPT app handoff',action:'Dictate, Ask, open ChatGPT, open connected files',home:'Small · Medium · Large',lock:'Launch Ask/Dictate action',note:'Conversation itself does not run inside the widget'},
-  caseactivity:{source:'Hosted activity feed + Drive working-doc links',action:'Open working hub/checkpoint',home:'Small · Medium · Large',lock:'Latest activity summary',note:'Current feed is a hosted snapshot; private direct Drive sync backend is still pending'}
+  caseactivity:{source:'Hosted activity feed + Drive working-doc links',action:'Open working hub/checkpoint',home:'Small · Medium · Large',lock:'Latest activity summary',note:'Private direct Drive sync backend is still pending'},
+  nextevent:{source:'Google Calendar via private Vercel feed',action:'Open next event',home:'Small · Medium · Large',lock:'Next event summary'},
+  daytimeline:{source:'Google Calendar via private Vercel feed',action:'Open event',home:'Small · Medium · Large',lock:'Today timeline summary'},
+  weekcalendar:{source:'Google Calendar via private Vercel feed',action:'Open calendar',home:'Small · Medium · Large',lock:'Week event count'},
+  upnext:{source:'Google Calendar + local tasks',action:'Open event or toggle task',home:'Small · Medium · Large',lock:'Next item'},
+  briefing:{source:'Google Calendar + local tasks + activity feed',action:'Open source item',home:'Small · Medium · Large',lock:'Brief summary'},
+  priority:{source:'Top open local tasks',action:'Toggle task complete',home:'Small · Medium · Large',lock:'Top priority'},
+  workday:{source:'Business tasks + Google Calendar + activity feed',action:'Open source item',home:'Small · Medium · Large',lock:'Workday summary'},
+  personalday:{source:'Personal tasks + Google Calendar + activity feed',action:'Open source item',home:'Small · Medium · Large',lock:'Personal-day summary'},
+  casepulse:{source:'Case activity feed',action:'Open connected Drive hub',home:'Small · Medium · Large',lock:'Recent update count'},
+  syncstatus:{source:'Case activity feed refresh timestamp',action:'Open connected Drive hub',home:'Small · Medium · Large',lock:'Last refresh'},
+  batteryfocus:{source:'iPhone battery + charging state',action:'Open configured list',home:'Small · Medium · Large',lock:'Battery %'},
+  quickcapture:{source:'Local Scriptable task store',action:'Start add-task input',home:'Small · Medium · Large',lock:'Tap to add',note:'Text entry may open Scriptable'},
 };
 
 function capabilityPanel(type:WidgetType){
@@ -316,19 +360,20 @@ function homeScreen(){
   const p=activeSet();
   return topBar('Home','Your current NaviOS setup')+
     '<section class="current-card"><div class="current-copy"><div class="eyebrow">CURRENT SET</div><h2>'+p.name+'</h2><p>'+p.description+'</p><div class="chips"><span>'+p.familyLabel+'</span><span>'+p.layout.join(' · ')+'</span></div></div><div class="mini-phone-wrap">'+phonePreview(p,'home')+'</div></section>'+
-    '<section class="quick-grid"><button data-go="widgets"><span>◫</span><b>Widget Library</b><small>27 live types · 270 style combinations</small></button><button data-go="sets"><span>▦</span><b>12 Home Sets</b><small>Reference-driven full setups</small></button><button data-go="lock"><span>◉</span><b>Lock Screen</b><small>12 matching lock styles</small></button><button id="apply-current"><span>↗</span><b>Apply current widget</b><small>Send to Scriptable</small></button></section>'+
+    '<section class="quick-grid"><button data-go="widgets"><span>◫</span><b>Widget Library</b><small>39 live types · 390 style combinations</small></button><button data-go="sets"><span>▦</span><b>12 Home Sets</b><small>Reference-driven full setups</small></button><button data-go="lock"><span>◉</span><b>Lock Screen</b><small>12 matching lock styles</small></button><button id="apply-current"><span>↗</span><b>Apply current widget</b><small>Send to Scriptable</small></button></section>'+
     '<section class="collection-strip">'+sets.slice(0,6).map(item=>'<button data-set="'+item.id+'" data-go="sets"><div class="collection-thumb set-'+item.id+'"></div><b>'+item.name+'</b><span>'+item.familyLabel+'</span></button>').join('')+'</section>'+
     '<section class="status-note"><b>Reference-led system</b><p>The new library expands the exact dark, monochrome, editorial, modular, and luxury directions from the screens you sent while keeping Scriptable as the live widget renderer.</p></section>';
 }
 
 function widgetsScreen(){
-  return topBar('Widgets','27 live widget types across 10 styles')+
-    '<section><div class="section-head"><span>TYPE</span><b>What should it show?</b></div><div class="widget-library">'+widgetTypes.map(([id,name,desc,icon])=>'<button class="widget-choice '+(state.type===id?'active':'')+'" data-type="'+id+'"><span class="widget-icon">'+icon+'</span><div><b>'+name+'</b><small>'+desc+'</small></div></button>').join('')+'</div></section>'+
+  return topBar('Widgets','12 independent slots · 39 live types · 10 styles')+
+    '<section><div class="section-head"><span>MULTI-SLOT</span><b>Each Home / Lock widget can keep its own setup</b></div>'+slotStrip()+'</section>'+
+    '<section><div class="section-head"><span>TYPE</span><b>What should Slot '+state.slot+' show?</b></div><div class="widget-library">'+widgetTypes.map(([id,name,desc,icon])=>'<button class="widget-choice '+(state.type===id?'active':'')+'" data-type="'+id+'"><span class="widget-icon">'+icon+'</span><div><b>'+name+'</b><small>'+desc+'</small></div></button>').join('')+'</div></section>'+
     '<section><div class="section-head"><span>LIST</span><b>Which side of your life?</b></div><div class="segmented"><button class="'+(state.list==='personal'?'active':'')+'" data-list="personal">Personal</button><button class="'+(state.list==='business'?'active':'')+'" data-list="business">Business</button></div></section>'+
     '<section><div class="section-head"><span>STYLE</span><b>Dark reference families</b></div><div class="theme-list">'+themes.map(([id,name,bg,card])=>'<button class="theme-row '+(state.theme===id?'active':'')+'" data-theme="'+id+'"><span class="swatch" style="--a:'+bg+';--b:'+card+'"></span><b>'+name+'</b><span>›</span></button>').join('')+'</div></section>'+
     '<section><div class="section-head"><span>PREVIEW</span><b>Live widget preview</b></div>'+widgetPreview(state.type,state.theme,state.list)+'</section>'+capabilityPanel(state.type)+
     '<button class="primary-action" id="apply-widget">Apply to Scriptable</button>'+
-    '<a class="engine-link" href="/NaviOS-v3.5.0.scriptable" download="NaviOS-v3.5.0.scriptable">Install / Update Widget Engine v3.5.0</a>';
+    '<a class="engine-link" href="/NaviOS-v4.1.0.scriptable" download="NaviOS-v4.1.0.scriptable">Install / Update Widget Engine v4.1.0</a>';
 }
 
 
@@ -391,6 +436,7 @@ function render(){
   document.querySelectorAll<HTMLElement>('[data-theme]').forEach(el=>el.onclick=()=>{state.theme=el.dataset.theme as ThemeType;saveState();render();});
   document.querySelectorAll<HTMLElement>('[data-set]').forEach(el=>el.onclick=()=>{state.set=el.dataset.set as SetId;saveState();render();});
   document.querySelectorAll<HTMLElement>('[data-family]').forEach(el=>el.onclick=()=>{state.family=el.dataset.family as Family;saveState();render();});
+  document.querySelectorAll<HTMLElement>('[data-slot]').forEach(el=>el.onclick=()=>{loadSlot(Number(el.dataset.slot||'1'));render();});
 
   document.querySelector<HTMLButtonElement>('#apply-widget')?.addEventListener('click',applyWidget);
   document.querySelector<HTMLButtonElement>('#apply-current')?.addEventListener('click',applyWidget);
