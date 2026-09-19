@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.0.0";
+const VERSION = "3.1.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -63,6 +63,31 @@ const TYPES = [
   "calendar", "minimalclock", "utility", "controlcenter", "launcher",
   "note", "quickadd", "completed", "essentials", "countdown", "overview"
 ];
+
+function widgetFamily() {
+  return config.widgetFamily || "medium";
+}
+
+function familyRows(smallRows, mediumRows, largeRows) {
+  const family = widgetFamily();
+  if (family === "small") return smallRows;
+  if (family === "large") return largeRows;
+  return mediumRows;
+}
+
+function familyFont(smallSize, mediumSize, largeSize) {
+  const family = widgetFamily();
+  if (family === "small") return smallSize;
+  if (family === "large") return largeSize;
+  return mediumSize;
+}
+
+function familyPadding() {
+  const family = widgetFamily();
+  if (family === "small") return [12, 12, 12, 12];
+  if (family === "large") return [16, 17, 15, 17];
+  return [14, 15, 13, 15];
+}
 
 function C(hex, alpha) {
   return new Color(hex, alpha == null ? 1 : alpha);
@@ -337,7 +362,8 @@ async function editTaskFlow(data, task) {
 function baseWidget(t) {
   const w = new ListWidget();
   w.backgroundColor = C(t.bg);
-  w.setPadding(14, 15, 13, 15);
+  const p = familyPadding();
+  w.setPadding(p[0], p[1], p[2], p[3]);
   w.spacing = 0;
   return w;
 }
@@ -369,7 +395,7 @@ function addHeader(widget, t, title, subtitle, metaURL) {
   }
 
   const h = left.addText(title);
-  h.font = displayFont(t, 25, "regular");
+  h.font = displayFont(t, familyFont(19, 25, 30), "regular");
   h.textColor = C(t.text);
   h.lineLimit = 1;
 
@@ -411,7 +437,7 @@ function buildTasksWidget(data, opts) {
   addGradientDivider(w, t, family === "small" ? 5 : 7);
 
   const active = openTasks(data, opts.list);
-  const maxRows = family === "large" ? 7 : family === "small" ? 2 : 4;
+  const maxRows = familyRows(2, 4, 7);
 
   if (!active.length) {
     w.addSpacer();
@@ -570,6 +596,25 @@ function buildAgendaWidget(data, opts) {
 }
 
 function buildDashboardWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const label = w.addText("NaviOS");
+    label.font = displayFont(t, 18, "regular");
+    label.textColor = C(t.text);
+    w.addSpacer(8);
+    const time = w.addText(fmtTime(new Date()));
+    time.font = displayFont(t, 31, "bold");
+    time.textColor = C(t.text);
+    w.addSpacer();
+    const meta = w.addText(openTasks(data, opts.list).length + " OPEN · " + completedToday(data, opts.list) + " DONE");
+    meta.font = Font.mediumSystemFont(7);
+    meta.textColor = C(t.secondary);
+    w.url = scriptURL({ action: "open", list: opts.list });
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const family = config.widgetFamily || "medium";
   const w = baseWidget(t);
@@ -858,7 +903,7 @@ function buildTodayWidget(data, opts) {
 
   addHeader(w, t, "Today", fmtDate(new Date(), "EEEE · MMM d"), scriptURL({ action: "open", list: opts.list }));
   addGradientDivider(w, t, 6);
-  addSimpleTaskRows(w, t, source, opts.list, (config.widgetFamily || "medium") === "large" ? 6 : 4);
+  addSimpleTaskRows(w, t, source, opts.list, familyRows(2, 4, 6));
 
   w.addSpacer();
   const footer = w.addStack();
@@ -876,6 +921,24 @@ function buildTodayWidget(data, opts) {
 }
 
 function buildSplitWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const p = w.addText(openTasks(data, "personal").length + "  Personal");
+    p.font = displayFont(t, 17, "regular");
+    p.textColor = C(t.text);
+    w.addSpacer(8);
+    const b = w.addText(openTasks(data, "business").length + "  Business");
+    b.font = displayFont(t, 17, "regular");
+    b.textColor = C(t.text);
+    w.addSpacer();
+    const meta = w.addText("NAVI OS");
+    meta.font = Font.mediumSystemFont(7);
+    meta.textColor = C(t.secondary);
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
 
@@ -930,6 +993,26 @@ function buildSplitWidget(data, opts) {
 }
 
 function buildWeeklyWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const title = w.addText("Week");
+    title.font = displayFont(t, 20, "regular");
+    title.textColor = C(t.text);
+    w.addSpacer(8);
+    for (let i = 0; i < 3; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const count = openTasks(data, opts.list).filter(x => x.due && new Date(x.due).toDateString() === d.toDateString()).length;
+      const row = w.addText(fmtDate(d, "EEE d") + " · " + count);
+      row.font = Font.mediumSystemFont(9);
+      row.textColor = i === 0 ? C(t.accent) : C(t.secondary);
+      w.addSpacer(4);
+    }
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
   addHeader(w, t, "Week", "NEXT 7 DAYS", scriptURL({ action: "open", list: opts.list }));
@@ -968,6 +1051,27 @@ function buildWeeklyWidget(data, opts) {
 }
 
 function buildProgressWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const listTasks = data.tasks.filter(x => x.list === opts.list);
+    const done = listTasks.filter(x => x.completed).length;
+    const total = listTasks.length;
+    const pct = total ? Math.round((done / total) * 100) : 100;
+    const big = w.addText(pct + "%");
+    big.font = displayFont(t, 38, "bold");
+    big.textColor = C(t.text);
+    const label = w.addText("PROGRESS");
+    label.font = Font.mediumSystemFont(7);
+    label.textColor = C(t.secondary);
+    w.addSpacer();
+    const meta = w.addText(openTasks(data, opts.list).length + " OPEN");
+    meta.font = Font.mediumSystemFont(8);
+    meta.textColor = C(t.accent);
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
   const listTasks = data.tasks.filter(x => x.list === opts.list);
@@ -1021,7 +1125,7 @@ function buildMorningWidget(data, opts) {
   time.textColor = C(t.text);
 
   w.addSpacer(10);
-  addSimpleTaskRows(w, t, openTasks(data, opts.list), opts.list, 3);
+  addSimpleTaskRows(w, t, openTasks(data, opts.list), opts.list, familyRows(1, 3, 5));
   w.url = scriptURL({ action: "open", list: opts.list });
   return w;
 }
@@ -1035,7 +1139,7 @@ function buildNightWidget(data, opts) {
   const tomorrow = dueTomorrowTasks(data, opts.list);
   const source = tomorrow.length ? tomorrow : openTasks(data, opts.list);
 
-  addSimpleTaskRows(w, t, source, opts.list, 4);
+  addSimpleTaskRows(w, t, source, opts.list, familyRows(2, 4, 6));
   w.addSpacer();
   const done = w.addText(completedToday(data, opts.list) + " completed today");
   done.font = Font.mediumSystemFont(8);
@@ -1054,7 +1158,7 @@ function buildFollowupWidget(data, opts) {
   let tasks = openTasks(data, "business").filter(x => rx.test(x.title));
   if (!tasks.length) tasks = openTasks(data, "business");
 
-  addSimpleTaskRows(w, t, tasks, "business", 5);
+  addSimpleTaskRows(w, t, tasks, "business", familyRows(2, 4, 6));
   w.url = scriptURL({ action: "open", list: "business" });
   return w;
 }
@@ -1084,7 +1188,7 @@ function buildCalendarWidget(data, opts) {
 
   w.addSpacer(12);
   const due = openTasks(data, opts.list).filter(x => x.due);
-  addSimpleTaskRows(w, t, due.length ? due : openTasks(data, opts.list), opts.list, 3);
+  addSimpleTaskRows(w, t, due.length ? due : openTasks(data, opts.list), opts.list, familyRows(1, 3, 5));
   w.url = scriptURL({ action: "open", list: opts.list });
   return w;
 }
@@ -1116,6 +1220,23 @@ function buildMinimalClockWidget(data, opts) {
 }
 
 function buildUtilityWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const battery = w.addText(Math.round(Device.batteryLevel() * 100) + "%");
+    battery.font = displayFont(t, 34, "bold");
+    battery.textColor = C(t.text);
+    const label = w.addText("BATTERY");
+    label.font = Font.mediumSystemFont(7);
+    label.textColor = C(t.secondary);
+    w.addSpacer();
+    const meta = w.addText(openTasks(data, opts.list).length + " TASKS");
+    meta.font = Font.mediumSystemFont(8);
+    meta.textColor = C(t.accent);
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
   addHeader(w, t, "Utility", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
@@ -1138,6 +1259,24 @@ function buildUtilityWidget(data, opts) {
 }
 
 function buildControlCenterWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const label = w.addText("CONTROL");
+    label.font = Font.mediumSystemFont(7);
+    label.textColor = C(t.secondary);
+    w.addSpacer(4);
+    const time = w.addText(fmtTime(new Date()));
+    time.font = displayFont(t, 29, "bold");
+    time.textColor = C(t.text);
+    w.addSpacer();
+    const meta = w.addText(Math.round(Device.batteryLevel() * 100) + "% · " + openTasks(data, opts.list).length + " OPEN");
+    meta.font = Font.mediumSystemFont(7);
+    meta.textColor = C(t.accent);
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
   addHeader(w, t, "Control Center", "NAVI OS", scriptURL({ action: "open", list: opts.list }));
@@ -1164,6 +1303,24 @@ function buildControlCenterWidget(data, opts) {
 }
 
 function buildLauncherWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const plus = w.addText("＋");
+    plus.font = displayFont(t, 38, "regular");
+    plus.textColor = C(t.accent);
+    const title = w.addText("Quick Add");
+    title.font = displayFont(t, 17, "regular");
+    title.textColor = C(t.text);
+    w.addSpacer();
+    const meta = w.addText("Tap to open NaviOS");
+    meta.font = Font.mediumSystemFont(7);
+    meta.textColor = C(t.secondary);
+    w.url = scriptURL({ action: "open", list: opts.list });
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
   addHeader(w, t, "Launcher", "NAVI OS", scriptURL({ action: "open", list: opts.list }));
@@ -1270,7 +1427,7 @@ function buildEssentialsWidget(data, opts) {
   const w = baseWidget(t);
   addHeader(w, t, "Essentials", "PERSONAL", scriptURL({ action: "open", list: "personal" }));
   addGradientDivider(w, t, 6);
-  addSimpleTaskRows(w, t, openTasks(data, "personal"), "personal", 5);
+  addSimpleTaskRows(w, t, openTasks(data, "personal"), "personal", familyRows(2, 4, 6));
   w.url = scriptURL({ action: "open", list: "personal" });
   return w;
 }
@@ -1302,6 +1459,23 @@ function buildCountdownWidget(data, opts) {
 }
 
 function buildOverviewWidget(data, opts) {
+
+  if (widgetFamily() === "small") {
+    const t = theme(opts.themeName);
+    const w = baseWidget(t);
+    const p = w.addText(openTasks(data, "personal").length + " / " + openTasks(data, "business").length);
+    p.font = displayFont(t, 34, "bold");
+    p.textColor = C(t.text);
+    const label = w.addText("PERSONAL / BUSINESS");
+    label.font = Font.mediumSystemFont(7);
+    label.textColor = C(t.secondary);
+    w.addSpacer();
+    const done = w.addText(completedToday(data, opts.list) + " DONE TODAY");
+    done.font = Font.mediumSystemFont(8);
+    done.textColor = C(t.accent);
+    return w;
+  }
+
   const t = theme(opts.themeName);
   const w = baseWidget(t);
   addHeader(w, t, "Overview", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
@@ -1313,7 +1487,7 @@ function buildOverviewWidget(data, opts) {
   const b = addCard(row, t, 10); addMetric(b, t, openTasks(data, "business").length, "Business", true);
 
   w.addSpacer(9);
-  addSimpleTaskRows(w, t, openTasks(data, opts.list), opts.list, 3);
+  addSimpleTaskRows(w, t, openTasks(data, opts.list), opts.list, familyRows(1, 3, 5));
 
   w.url = scriptURL({ action: "open", list: opts.list });
   return w;
