@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.5.0";
+const VERSION = "4.0.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -196,12 +196,56 @@ function defaultWidgetConfig() {
   return { type: "tasks", list: "personal", themeName: "graphite" };
 }
 
-function loadWidgetConfig() {
-  if (!fm.fileExists(configPath)) {
-    const c = defaultWidgetConfig();
-    saveWidgetConfig(c);
-    return c;
+const SLOT_COUNT = 12;
+const slotsPath = fm.joinPath(baseDir, "widget-slots.json");
+
+function normalizeSlot(raw) {
+  const m = String(raw || "").toLowerCase().match(/(?:slot)?(\d{1,2})/);
+  if (!m) return "slot1";
+  const n = Math.max(1, Math.min(SLOT_COUNT, parseInt(m[1], 10)));
+  return "slot" + n;
+}
+
+function defaultSlots() {
+  const out = {};
+  for (let i = 1; i <= SLOT_COUNT; i++) out["slot" + i] = defaultWidgetConfig();
+  return out;
+}
+
+function loadSlots() {
+  if (!fm.fileExists(slotsPath)) {
+    const legacy = loadWidgetConfigLegacy();
+    const slots = defaultSlots();
+    slots.slot1 = legacy;
+    fm.writeString(slotsPath, JSON.stringify(slots, null, 2));
+    return slots;
   }
+  try {
+    const raw = JSON.parse(fm.readString(slotsPath));
+    const clean = defaultSlots();
+    for (let i = 1; i <= SLOT_COUNT; i++) {
+      const key = "slot" + i;
+      const c = raw[key] || clean[key];
+      clean[key] = {
+        type: normalizeType(c.type),
+        list: normalizeList(c.list),
+        themeName: normalizeTheme(c.themeName)
+      };
+    }
+    return clean;
+  } catch (_) {
+    const slots = defaultSlots();
+    fm.writeString(slotsPath, JSON.stringify(slots, null, 2));
+    return slots;
+  }
+}
+
+function saveSlots(slots) {
+  fm.writeString(slotsPath, JSON.stringify(slots, null, 2));
+}
+
+function loadWidgetConfigLegacy() {
+  if (!fm.fileExists(configPath)) return defaultWidgetConfig();
   try {
     const c = JSON.parse(fm.readString(configPath));
     return {
@@ -210,26 +254,39 @@ function loadWidgetConfig() {
       themeName: normalizeTheme(c.themeName)
     };
   } catch (_) {
-    const c = defaultWidgetConfig();
-    saveWidgetConfig(c);
-    return c;
+    return defaultWidgetConfig();
   }
 }
 
-function saveWidgetConfig(c) {
-  const clean = {
+function loadWidgetConfig(slot) {
+  const key = normalizeSlot(slot);
+  return loadSlots()[key] || defaultWidgetConfig();
+}
+
+function saveWidgetConfig(c, slot) {
+  const key = normalizeSlot(slot);
+  const slots = loadSlots();
+  slots[key] = {
     type: normalizeType(c.type),
     list: normalizeList(c.list),
     themeName: normalizeTheme(c.themeName)
   };
-  fm.writeString(configPath, JSON.stringify(clean, null, 2));
+  saveSlots(slots);
+
+  // Keep legacy slot1 config for older installs/actions.
+  if (key === "slot1") {
+    fm.writeString(configPath, JSON.stringify(slots[key], null, 2));
+  }
 }
 
 function parseWidgetParameter(raw) {
-  const parts = String(raw || "").toLowerCase().split("|").map(s => s.trim()).filter(Boolean);
-  if (!parts.length) return loadWidgetConfig();
+  const parts = String(raw || "").toLowerCase().split("|").map(x => x.trim()).filter(Boolean);
+  let slot = "slot1";
+  for (const p of parts) {
+    if (/^(?:slot)?\d{1,2}$/.test(p)) slot = normalizeSlot(p);
+  }
 
-  const saved = loadWidgetConfig();
+  const saved = loadWidgetConfig(slot);
   let type = saved.type;
   let list = saved.list;
   let themeName = saved.themeName;
@@ -239,7 +296,7 @@ function parseWidgetParameter(raw) {
     else if (p === "personal" || p === "business") list = p;
     else if (THEMES[p]) themeName = p;
   }
-  return { type, list, themeName };
+  return { type, list, themeName, slot };
 }
 
 function fmtDate(date, format) {
@@ -2055,7 +2112,14 @@ async function buildWidget(data, opts) {
 }
 
 async function chooseHomeWidget(data, state) {
-  const current = loadWidgetConfig();
+  const slotAlert = new Alert();
+  slotAlert.title = "Choose Widget Slot";
+  for (let i = 1; i <= SLOT_COUNT; i++) slotAlert.addAction("Slot " + i);
+  slotAlert.addCancelAction("Cancel");
+  const slotIndex = await slotAlert.present();
+  if (slotIndex < 0) return false;
+  const slot = "slot" + (slotIndex + 1);
+  const current = loadWidgetConfig(slot);
 
   const typeAlert = new Alert();
   typeAlert.title = "Home Widget";
@@ -2093,11 +2157,11 @@ async function chooseHomeWidget(data, state) {
     themeName: themeKeys[themeIndex]
   };
 
-  saveWidgetConfig(next);
+  saveWidgetConfig(next, slot);
   state.selected = next.list;
 
   const done = new Alert();
-  done.title = "Home Widget Saved";
+  done.title = "Widget " + slot.toUpperCase() + " Saved";
   done.message = TYPES[typeIndex][0].toUpperCase() + TYPES[typeIndex].slice(1) +
     " · " + listTitle(next.list) + " · " + THEMES[next.themeName].name;
   done.addAction("Preview");
@@ -2310,10 +2374,11 @@ async function handleAction(data) {
       list: normalizeList(q.list),
       themeName: normalizeTheme(q.theme)
     };
-    saveWidgetConfig(next);
+    const slot = normalizeSlot(q.slot || "slot1");
+    saveWidgetConfig(next, slot);
 
     const saved = new Alert();
-    saved.title = "NaviOS Widget Updated";
+    saved.title = "Widget " + slot.toUpperCase() + " Updated";
     saved.message =
       next.type[0].toUpperCase() + next.type.slice(1) +
       " · " + listTitle(next.list) +
