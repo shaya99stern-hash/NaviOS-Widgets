@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-18T17:28:57-04:00",
+  "status": "Connected",
+  "progress": null,
+  "items": [
+    {
+      "kind": "update",
+      "title": "Case checkpoint updated",
+      "subtitle": "Latest working notes changed",
+      "timestamp": "2026-09-18T17:28:57-04:00",
+      "url": "https://docs.google.com/document/d/10viUGHubi9jD12K9yIgR4IvFh3nW8UjlUfXu0k-FhIA/edit"
+    },
+    {
+      "kind": "update",
+      "title": "Working hub updated",
+      "subtitle": "Shared case hub changed",
+      "timestamp": "2026-09-18T16:38:54-04:00",
+      "url": "https://docs.google.com/document/d/1T2twulKoTevf4TMBxAtnkC54uixROyI_Z3nhNQjZuX4/edit"
+    },
+    {
+      "kind": "doc",
+      "title": "Source register updated",
+      "subtitle": "Drive source register changed",
+      "timestamp": "2026-09-18T16:04:06-04:00",
+      "url": "https://docs.google.com/document/d/1qi_E5JGYuDr9uj2Ti8AO3gpadE6KdnsmGvaMzKrvnro/edit"
+    }
+  ],
+  "links": {
+    "hub": "https://docs.google.com/document/d/1T2twulKoTevf4TMBxAtnkC54uixROyI_Z3nhNQjZuX4/edit",
+    "checkpoint": "https://docs.google.com/document/d/10viUGHubi9jD12K9yIgR4IvFh3nW8UjlUfXu0k-FhIA/edit"
+  },
+  "privacy": "sanitized-public-metadata-only"
+}
