@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.3.0";
+const VERSION = "3.4.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -54,6 +54,34 @@ const THEMES = {
     text: "#F6F3ED", secondary: "#96918A", faint: "#44413D",
     accent: "#D0C7BA", line: "#6B645C",
     serif: true, radius: 11, mark: "■"
+  },
+  edgeglow: {
+    name: "Edge Glow",
+    bg: "#06070A", panel: "#0E1117", panel2: "#151927",
+    text: "#F4F4F7", secondary: "#A5A7B0", faint: "#4E5260",
+    accent: "#8C7CFF", line: "#4D5FBF",
+    serif: false, radius: 19, mark: "◈"
+  },
+  matrix: {
+    name: "Control Matrix",
+    bg: "#040506", panel: "#0B0D0F", panel2: "#15181B",
+    text: "#F2F3F3", secondary: "#979CA0", faint: "#42484D",
+    accent: "#9DA4AA", line: "#52585D",
+    serif: false, radius: 12, mark: "▦"
+  },
+  softglass: {
+    name: "Soft Glass Mono",
+    bg: "#090A0C", panel: "#15171A", panel2: "#202328",
+    text: "#F1F2F2", secondary: "#9B9EA3", faint: "#50545A",
+    accent: "#C5C8CC", line: "#6D7278",
+    serif: false, radius: 22, mark: "◌"
+  },
+  copper: {
+    name: "Warm Copper",
+    bg: "#0A0807", panel: "#17110E", panel2: "#231913",
+    text: "#F3EAE2", secondary: "#B6A295", faint: "#5A4B43",
+    accent: "#E0A074", line: "#8C624D",
+    serif: true, radius: 18, mark: "◇"
   }
 };
 
