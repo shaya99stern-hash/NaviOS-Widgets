@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.4.0";
+const VERSION = "3.5.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -1894,7 +1894,137 @@ async function buildCaseActivityWidget(opts) {
   return w;
 }
 
+
+function accessoryTextForType(data, opts, feed) {
+  const type = opts.type;
+  const open = openTasks(data, opts.list);
+  const next = open[0];
+
+  if (type === "clock" || type === "minimalclock") return fmtTime(new Date());
+  if (type === "today") return (open.length ? open.length + " open today" : "Today clear");
+  if (type === "focus") return next ? next.title : "Nothing pressing";
+  if (type === "status") return Math.round(Device.batteryLevel() * 100) + "% battery";
+  if (type === "progress") {
+    const all = data.tasks.filter(x => x.list === opts.list);
+    const done = all.filter(x => x.completed).length;
+    return (all.length ? Math.round(done / all.length * 100) : 100) + "% complete";
+  }
+  if (type === "split") return openTasks(data, "personal").length + " personal · " + openTasks(data, "business").length + " business";
+  if (type === "weekly") return "Week · " + open.filter(x => x.due).length + " scheduled";
+  if (type === "countdown") {
+    const timed = open.find(x => x.due);
+    return timed ? relativeDue(timed.due) + " · " + timed.title : "No timed task";
+  }
+  if (type === "completed") return completedToday(data, opts.list) + " done today";
+  if (type === "caseactivity") {
+    const first = feed && feed.items && feed.items[0];
+    return first ? first.title : "Case activity";
+  }
+  if (type === "chatgpt") return "Ask ChatGPT";
+  if (type === "agenda" || type === "calendar") return next ? next.title : "No upcoming item";
+  if (type === "followup") {
+    const rx = /(follow|call|email|text|reply|check|contact|send|reach)/i;
+    const item = openTasks(data, "business").find(x => rx.test(x.title));
+    return item ? item.title : "No follow-up";
+  }
+  if (type === "utility" || type === "controlcenter" || type === "dashboard" || type === "overview") {
+    return openTasks(data, "personal").length + " personal · " + openTasks(data, "business").length + " business";
+  }
+  if (type === "quickadd" || type === "launcher") return "Quick actions";
+  if (type === "note") return next ? next.title : "Daily note";
+  if (type === "morning") return "Morning · " + open.length + " open";
+  if (type === "night") return completedToday(data, opts.list) + " done · tomorrow next";
+  if (type === "essentials") return openTasks(data, "personal").length + " essentials";
+  if (type === "compact" || type === "tasks") return open.length + " open · " + listTitle(opts.list);
+  return listTitle(opts.list);
+}
+
+async function buildAccessoryWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const family = widgetFamily();
+  const w = new ListWidget();
+  w.backgroundColor = C(t.bg);
+
+  let feed = null;
+  if (opts.type === "caseactivity") feed = await loadCaseActivityFeed();
+
+  const summary = accessoryTextForType(data, opts, feed);
+
+  if (family === "accessoryInline") {
+    const line = w.addText(summary);
+    line.font = Font.mediumSystemFont(12);
+    line.textColor = Color.white();
+    if (opts.type === "chatgpt") w.url = scriptURL({ action: "chatgptDictate" });
+    else if (opts.type === "caseactivity") w.url = feed && feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub;
+    else w.url = scriptURL({ action: "open", list: opts.list });
+    return w;
+  }
+
+  if (family === "accessoryCircular") {
+    w.setPadding(5,5,5,5);
+    const stack = w.addStack();
+    stack.layoutVertically();
+    stack.centerAlignContent();
+
+    let iconText = "•";
+    if (opts.type === "clock" || opts.type === "minimalclock") iconText = fmtTime(new Date()).replace(/\s?[AP]M/i,"");
+    else if (opts.type === "status") iconText = Math.round(Device.batteryLevel() * 100) + "%";
+    else if (opts.type === "progress") {
+      const all = data.tasks.filter(x => x.list === opts.list);
+      const done = all.filter(x => x.completed).length;
+      iconText = (all.length ? Math.round(done / all.length * 100) : 100) + "%";
+    }
+    else if (opts.type === "caseactivity") iconText = String((feed && feed.items ? feed.items.length : 0));
+    else if (opts.type === "chatgpt") iconText = "✦";
+    else iconText = String(openTasks(data, opts.list).length);
+
+    const value = stack.addText(iconText);
+    value.font = Font.semiboldSystemFont(iconText.length > 3 ? 12 : 16);
+    value.textColor = Color.white();
+
+    const tiny = stack.addText(opts.type === "chatgpt" ? "ASK" : opts.type === "caseactivity" ? "UPD" : "OPEN");
+    tiny.font = Font.mediumSystemFont(6);
+    tiny.textColor = Color.gray();
+
+    if (opts.type === "chatgpt") w.url = scriptURL({ action: "chatgptDictate" });
+    else if (opts.type === "caseactivity") w.url = feed && feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub;
+    else w.url = scriptURL({ action: "open", list: opts.list });
+    return w;
+  }
+
+  // accessoryRectangular
+  w.setPadding(8,10,8,10);
+  const label = w.addText(
+    opts.type === "caseactivity" ? "Recent Activity" :
+    opts.type === "chatgpt" ? "ChatGPT" :
+    opts.type === "focus" ? "Focus" :
+    opts.type === "status" ? "Status" :
+    opts.type === "today" ? "Today" :
+    opts.type === "progress" ? "Progress" :
+    listTitle(opts.list)
+  );
+  label.font = Font.semiboldSystemFont(8);
+  label.textColor = Color.gray();
+
+  w.addSpacer(3);
+
+  const body = w.addText(summary);
+  body.font = Font.mediumSystemFont(11);
+  body.textColor = Color.white();
+  body.lineLimit = 2;
+  body.minimumScaleFactor = 0.72;
+
+  if (opts.type === "chatgpt") w.url = scriptURL({ action: "chatgptDictate" });
+  else if (opts.type === "caseactivity") w.url = feed && feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub;
+  else if (opts.type === "quickadd") w.url = scriptURL({ action: "add", list: opts.list });
+  else w.url = scriptURL({ action: "open", list: opts.list });
+
+  w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
+  return w;
+}
+
 async function buildWidget(data, opts) {
+  if (String(widgetFamily()).startsWith("accessory")) return await buildAccessoryWidget(data, opts);
   if (opts.type === "clock") return buildClockWidget(data, opts);
   if (opts.type === "agenda") return buildAgendaWidget(data, opts);
   if (opts.type === "dashboard") return buildDashboardWidget(data, opts);
