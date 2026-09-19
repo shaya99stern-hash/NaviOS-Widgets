@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "4.2.0";
+const VERSION = "4.3.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -2320,6 +2320,83 @@ function buildQuickCaptureWidget(data,opts){
   return w;
 }
 
+
+async function buildInboxWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),g=await loadGoogleLiveData();
+  addHeader(w,t,"Inbox","GMAIL","https://mail.google.com/");
+  w.addSpacer(8);
+  if(!g.ok){const x=w.addText("Google not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  const msgs=(g.gmail||[]).slice(0,familyRows(2,4,6));
+  if(!msgs.length){const x=w.addText("Inbox clear.");x.font=displayFont(t,14,"regular");x.textColor=C(t.secondary);return w;}
+  for(const m of msgs){
+    const row=w.addStack();row.layoutVertically();row.url="https://mail.google.com/";
+    const from=row.addText((m.from||"Email").replace(/<.*?>/g,"").trim());from.font=Font.semiboldSystemFont(9);from.textColor=C(t.text);from.lineLimit=1;
+    const sub=row.addText(m.subject||m.snippet||"");sub.font=Font.regularSystemFont(8);sub.textColor=C(t.secondary);sub.lineLimit=1;
+    w.addSpacer(6);
+  }
+  return w;
+}
+async function buildLatestEmailWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),g=await loadGoogleLiveData();
+  addHeader(w,t,"Latest Email","GMAIL","https://mail.google.com/");
+  w.addSpacer(8);
+  if(!g.ok||!g.gmail?.length){const x=w.addText(g.ok?"No recent email":"Google not connected");x.font=displayFont(t,14,"regular");x.textColor=C(t.secondary);return w;}
+  const m=g.gmail[0];
+  const from=w.addText((m.from||"Email").replace(/<.*?>/g,"").trim());from.font=displayFont(t,familyFont(16,22,27),"regular");from.textColor=C(t.text);from.lineLimit=2;
+  w.addSpacer(5);
+  const subject=w.addText(m.subject||m.snippet||"");subject.font=Font.mediumSystemFont(familyFont(9,11,13));subject.textColor=C(t.secondary);subject.lineLimit=3;
+  w.url="https://mail.google.com/";
+  return w;
+}
+async function buildDriveActivityWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),g=await loadGoogleLiveData();
+  addHeader(w,t,"Drive Activity","GOOGLE DRIVE","https://drive.google.com/");
+  w.addSpacer(8);
+  if(!g.ok){const x=w.addText("Google not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  const files=(g.drive||[]).slice(0,familyRows(2,4,6));
+  for(const file of files){
+    const row=w.addStack();row.layoutHorizontally();row.url=file.webViewLink||"https://drive.google.com/";
+    const icon=row.addText("▣");icon.font=Font.semiboldSystemFont(9);icon.textColor=C(t.accent);row.addSpacer(8);
+    const name=row.addText(file.name||"File");name.font=Font.mediumSystemFont(10);name.textColor=C(t.text);name.lineLimit=1;
+    row.addSpacer();
+    const time=row.addText(file.modifiedTime?relativeTimeFromISO(file.modifiedTime):"");time.font=Font.mediumSystemFont(7);time.textColor=C(t.faint);
+    w.addSpacer(6);
+  }
+  return w;
+}
+async function buildRecentFilesWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),g=await loadGoogleLiveData();
+  addHeader(w,t,"Recent Files","DRIVE","https://drive.google.com/");
+  w.addSpacer(8);
+  if(!g.ok){const x=w.addText("Google not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  const count=(g.drive||[]).length;
+  const big=w.addText(String(count));big.font=displayFont(t,familyFont(34,46,56),"bold");big.textColor=C(t.accent);
+  const lbl=w.addText("RECENT FILES");lbl.font=Font.mediumSystemFont(7);lbl.textColor=C(t.secondary);
+  if(widgetFamily()!=="small"){
+    w.addSpacer(8);
+    for(const file of (g.drive||[]).slice(0,familyRows(1,3,5))){
+      const x=w.addText(file.name||"File");x.font=Font.mediumSystemFont(9);x.textColor=C(t.text);x.lineLimit=1;x.url=file.webViewLink||"https://drive.google.com/";w.addSpacer(5);
+    }
+  }
+  return w;
+}
+async function buildGoogleBriefWidget(data,opts){
+  const t=theme(opts.themeName),w=baseWidget(t),g=await loadGoogleLiveData();
+  addHeader(w,t,"Google Brief","GMAIL · DRIVE · CALENDAR","https://navi-os-widgets.vercel.app/api/google/status");
+  w.addSpacer(8);
+  if(!g.ok){const x=w.addText("Google not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
+  const rows=[];
+  if(g.calendar?.[0])rows.push(["CAL",eventTimeLabel(g.calendar[0].start)+" · "+g.calendar[0].title,g.calendar[0].htmlLink]);
+  if(g.gmail?.[0])rows.push(["MAIL",(g.gmail[0].from||"Email").replace(/<.*?>/g,"").trim()+" · "+(g.gmail[0].subject||""),"https://mail.google.com/"]);
+  if(g.drive?.[0])rows.push(["DRIVE",g.drive[0].name,g.drive[0].webViewLink]);
+  for(const [k,v,u] of rows){
+    const row=w.addStack();row.layoutHorizontally();if(u)row.url=u;
+    const a=row.addText(k);a.font=Font.semiboldSystemFont(7);a.textColor=C(t.accent);row.addSpacer(8);
+    const b=row.addText(v);b.font=Font.mediumSystemFont(9);b.textColor=C(t.text);b.lineLimit=1;
+    w.addSpacer(7);
+  }
+  return w;
+}
 async function buildWidget(data, opts) {
   if (String(widgetFamily()).startsWith("accessory")) return await buildAccessoryWidget(data, opts);
   if (opts.type === "clock") return buildClockWidget(data, opts);
@@ -2360,6 +2437,11 @@ async function buildWidget(data, opts) {
   if (opts.type === "syncstatus") return await buildSyncStatusWidget(data, opts);
   if (opts.type === "batteryfocus") return buildBatteryFocusWidget(data, opts);
   if (opts.type === "quickcapture") return buildQuickCaptureWidget(data, opts);
+  if (opts.type === "inbox") return await buildInboxWidget(data, opts);
+  if (opts.type === "latestemail") return await buildLatestEmailWidget(data, opts);
+  if (opts.type === "driveactivity") return await buildDriveActivityWidget(data, opts);
+  if (opts.type === "recentfiles") return await buildRecentFilesWidget(data, opts);
+  if (opts.type === "googlebrief") return await buildGoogleBriefWidget(data, opts);
   return buildTasksWidget(data, opts);
 }
 
