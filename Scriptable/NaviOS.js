@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "4.1.0";
+const VERSION = "4.2.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -630,20 +630,35 @@ function buildClockWidget(data, opts) {
   return w;
 }
 
-const GOOGLE_CALENDAR_FEED_URL = "https://navi-os-widgets.vercel.app/api/calendar";
+const GOOGLE_DATA_URL = "https://navi-os-widgets.vercel.app/api/google/data";
+const googleTokenPath = fm.joinPath(baseDir, "google-connection.txt");
 
-async function loadGoogleCalendarFeed() {
+function saveGoogleConnectionToken(token) {
+  fm.writeString(googleTokenPath, String(token || "").trim());
+}
+function loadGoogleConnectionToken() {
+  if (!fm.fileExists(googleTokenPath)) return "";
+  try { return fm.readString(googleTokenPath).trim(); } catch (_) { return ""; }
+}
+async function loadGoogleLiveData() {
+  const token = loadGoogleConnectionToken();
+  if (!token) return { ok:false, error:"not_connected", gmail:[], drive:[], calendar:[] };
   try {
-    const req = new Request(GOOGLE_CALENDAR_FEED_URL + "?t=" + Date.now());
-    req.timeoutInterval = 8;
+    const req = new Request(GOOGLE_DATA_URL + "?t=" + Date.now());
+    req.headers = { Authorization: "Bearer " + token };
+    req.timeoutInterval = 12;
     const payload = await req.loadJSON();
-    if (!payload || payload.ok !== true || !Array.isArray(payload.events)) return { ok:false, events:[] };
+    if (!payload || payload.ok !== true) return { ok:false, error:payload && payload.error || "fetch_failed", gmail:[], drive:[], calendar:[] };
     return payload;
   } catch (_) {
-    return { ok:false, events:[] };
+    return { ok:false, error:"fetch_failed", gmail:[], drive:[], calendar:[] };
   }
 }
 
+async function loadGoogleCalendarFeed() {
+  const data = await loadGoogleLiveData();
+  return { ok:data.ok === true, events:Array.isArray(data.calendar)?data.calendar:[], updated_at:data.updated_at || null };
+}
 function eventTimeLabel(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -657,7 +672,7 @@ async function buildAgendaWidget(data, opts) {
   const w = baseWidget(t);
   const feed = await loadGoogleCalendarFeed();
 
-  addHeader(w, t, "Agenda", "GOOGLE CALENDAR", GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  addHeader(w, t, "Agenda", "GOOGLE CALENDAR", "https://calendar.google.com");
   addGradientDivider(w, t, 6);
 
   if (!feed.ok) {
@@ -1279,7 +1294,7 @@ async function buildCalendarWidget(data, opts) {
   const w=baseWidget(t);
   const feed=await loadGoogleCalendarFeed();
 
-  addHeader(w,t,fmtDate(new Date(),"MMMM"),"GOOGLE CALENDAR",GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  addHeader(w,t,fmtDate(new Date(),"MMMM"),"GOOGLE CALENDAR","https://calendar.google.com");
   w.addSpacer(9);
 
   const strip=w.addStack();
@@ -1805,6 +1820,41 @@ const CASE_ACTIVITY_FALLBACK = {
 };
 
 async function loadCaseActivityFeed() {
+  const live = await loadGoogleLiveData();
+  if (live.ok) {
+    const items = [];
+    for (const f of (live.drive || []).slice(0,6)) {
+      items.push({
+        kind:"file",
+        title:f.name || "Drive file updated",
+        subtitle:"Google Drive",
+        timestamp:f.modifiedTime || null,
+        url:f.webViewLink || null
+      });
+    }
+    for (const m of (live.gmail || []).slice(0,4)) {
+      items.push({
+        kind:"message",
+        title:(m.from ? "Email from " + m.from.replace(/<.*?>/g,"").trim() : "New email"),
+        subtitle:m.subject || m.snippet || "",
+        timestamp:m.date || null,
+        url:"https://mail.google.com/"
+      });
+    }
+    items.sort((a,b)=>new Date(b.timestamp||0)-new Date(a.timestamp||0));
+    return {
+      updated_at:live.updated_at || new Date().toISOString(),
+      status:"Connected",
+      progress:null,
+      items:items.slice(0,8),
+      links:{
+        hub:"https://drive.google.com/drive/my-drive",
+        checkpoint:"https://mail.google.com/"
+      },
+      source:"google-live"
+    };
+  }
+
   try {
     const req = new Request(CASE_ACTIVITY_FEED_URL + "?t=" + Date.now());
     req.timeoutInterval = 8;
@@ -1815,7 +1865,6 @@ async function loadCaseActivityFeed() {
     return CASE_ACTIVITY_FALLBACK;
   }
 }
-
 function relativeTimeFromISO(iso) {
   if (!iso) return "";
   const ms = Date.now() - new Date(iso).getTime();
@@ -2127,7 +2176,7 @@ async function buildAccessoryWidget(data, opts) {
 
 async function buildNextEventWidget(data, opts) {
   const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
-  addHeader(w,t,"Next Event","GOOGLE CALENDAR",GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  addHeader(w,t,"Next Event","GOOGLE CALENDAR","https://calendar.google.com");
   w.addSpacer(8);
   if(!feed.ok || !feed.events.length){
     const x=w.addText(feed.ok?"Calendar clear":"Google Calendar not connected");
@@ -2145,7 +2194,7 @@ async function buildNextEventWidget(data, opts) {
 
 async function buildDayTimelineWidget(data, opts) {
   const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
-  addHeader(w,t,"Day Timeline",fmtDate(new Date()),GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  addHeader(w,t,"Day Timeline",fmtDate(new Date()),"https://calendar.google.com");
   w.addSpacer(7);
   if(!feed.ok){const x=w.addText("Google Calendar not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
   const today=new Date().toDateString();
@@ -2164,7 +2213,7 @@ async function buildDayTimelineWidget(data, opts) {
 
 async function buildWeekCalendarWidget(data, opts) {
   const t=theme(opts.themeName), w=baseWidget(t), feed=await loadGoogleCalendarFeed();
-  addHeader(w,t,"Week", "GOOGLE CALENDAR", GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
+  addHeader(w,t,"Week", "GOOGLE CALENDAR", "https://calendar.google.com");
   w.addSpacer(8);
   if(!feed.ok){const x=w.addText("Google Calendar not connected");x.font=Font.mediumSystemFont(10);x.textColor=C(t.secondary);return w;}
   const days=[];
@@ -2589,6 +2638,16 @@ async function handleAction(data) {
     saved.addAction("Done");
     await saved.present();
     return { list: next.list, reopen: false };
+  }
+
+  if (action === "googleConnect" && q.token) {
+    saveGoogleConnectionToken(q.token);
+    const a = new Alert();
+    a.title = "Google Connected";
+    a.message = "Gmail, Drive and Google Calendar are now connected to this iPhone widget engine.";
+    a.addAction("Done");
+    await a.present();
+    return { list, reopen: false };
   }
 
   if (action === "chatgptDictate") {
