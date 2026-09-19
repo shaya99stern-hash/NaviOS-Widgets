@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.2.1";
+const VERSION = "3.3.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -1662,7 +1662,211 @@ function buildChatGPTWidget(data, opts) {
   return w;
 }
 
-function buildWidget(data, opts) {
+
+const CASE_ACTIVITY_FEED_URL = "https://raw.githubusercontent.com/shaya99stern-hash/NaviOS-Widgets/main/data/case-activity.json";
+const CASE_ACTIVITY_FALLBACK = {
+  updated_at: null,
+  status: "Connected",
+  progress: null,
+  items: [],
+  links: {
+    hub: "https://docs.google.com/document/d/1T2twulKoTevf4TMBxAtnkC54uixROyI_Z3nhNQjZuX4/edit",
+    checkpoint: "https://docs.google.com/document/d/10viUGHubi9jD12K9yIgR4IvFh3nW8UjlUfXu0k-FhIA/edit"
+  }
+};
+
+async function loadCaseActivityFeed() {
+  try {
+    const req = new Request(CASE_ACTIVITY_FEED_URL + "?t=" + Date.now());
+    req.timeoutInterval = 8;
+    const payload = await req.loadJSON();
+    if (!payload || !Array.isArray(payload.items)) return CASE_ACTIVITY_FALLBACK;
+    return payload;
+  } catch (_) {
+    return CASE_ACTIVITY_FALLBACK;
+  }
+}
+
+function relativeTimeFromISO(iso) {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60000) return "now";
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins + "m ago";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + "h ago";
+  return Math.floor(hrs / 24) + "d ago";
+}
+
+function activityIcon(kind) {
+  const map = {
+    file: "▣",
+    doc: "□",
+    message: "▢",
+    sync: "✓",
+    reminder: "◷",
+    update: "•"
+  };
+  return map[kind] || "•";
+}
+
+async function buildCaseActivityWidget(opts) {
+  const t = theme(opts.themeName);
+  const family = widgetFamily();
+  const feed = await loadCaseActivityFeed();
+  const w = baseWidget(t);
+  const items = (feed.items || []).slice(0, family === "small" ? 1 : family === "large" ? 5 : 2);
+  const updated = feed.updated_at ? relativeTimeFromISO(feed.updated_at) : "";
+
+  if (family === "small") {
+    const top = w.addStack();
+    top.layoutHorizontally();
+
+    const folder = top.addText("▣");
+    folder.font = displayFont(t, 24, "regular");
+    folder.textColor = C(t.accent);
+
+    top.addSpacer();
+
+    const live = top.addText(feed.status || "Connected");
+    live.font = Font.mediumSystemFont(8);
+    live.textColor = C(t.secondary);
+
+    w.addSpacer(10);
+
+    const title = w.addText("Case Activity");
+    title.font = displayFont(t, 18, "regular");
+    title.textColor = C(t.text);
+
+    w.addSpacer(8);
+
+    if (items.length) {
+      const item = items[0];
+      const row = w.addStack();
+      row.layoutHorizontally();
+      const icon = row.addText(activityIcon(item.kind));
+      icon.font = Font.semiboldSystemFont(10);
+      icon.textColor = C(t.accent);
+      row.addSpacer(7);
+      const text = row.addText(item.title || "Recent update");
+      text.font = Font.mediumSystemFont(9);
+      text.textColor = C(t.text);
+      text.lineLimit = 2;
+    } else {
+      const empty = w.addText("No recent updates");
+      empty.font = Font.mediumSystemFont(9);
+      empty.textColor = C(t.secondary);
+    }
+
+    w.addSpacer();
+
+    const foot = w.addText(updated ? "UPDATED " + updated.toUpperCase() : "DRIVE");
+    foot.font = Font.mediumSystemFont(7);
+    foot.textColor = C(t.faint);
+
+    w.url = feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub;
+    w.refreshAfterDate = new Date(Date.now() + 10 * 60 * 1000);
+    return w;
+  }
+
+  addHeader(w, t, "Recent Activity", updated ? "UPDATED " + updated.toUpperCase() : "DRIVE", feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub);
+
+  if (feed.progress !== null && feed.progress !== undefined) {
+    w.addSpacer(8);
+    const bar = w.addStack();
+    bar.size = new Size(0, 5);
+    bar.backgroundColor = C(t.panel2);
+    bar.cornerRadius = 3;
+    const fill = bar.addStack();
+    const pct = Math.max(0, Math.min(100, Number(feed.progress) || 0));
+    fill.size = new Size(Math.max(8, 250 * pct / 100), 5);
+    fill.backgroundColor = C(t.accent);
+    fill.cornerRadius = 3;
+
+    const p = w.addText(String(Math.round(pct)) + "%");
+    p.font = Font.mediumSystemFont(8);
+    p.textColor = C(t.secondary);
+  }
+
+  w.addSpacer(10);
+
+  if (!items.length) {
+    const empty = w.addText("No recent Drive updates.");
+    empty.font = Font.mediumSystemFont(10);
+    empty.textColor = C(t.secondary);
+  } else {
+    for (const item of items) {
+      const row = w.addStack();
+      row.layoutHorizontally();
+      row.centerAlignContent();
+
+      const iconBox = addCard(row, t, 7);
+      const icon = iconBox.addText(activityIcon(item.kind));
+      icon.font = Font.semiboldSystemFont(9);
+      icon.textColor = C(t.accent);
+
+      row.addSpacer(8);
+
+      const mid = row.addStack();
+      mid.layoutVertically();
+      const title = mid.addText(item.title || "Update");
+      title.font = Font.mediumSystemFont(family === "large" ? 11 : 10);
+      title.textColor = C(t.text);
+      title.lineLimit = 1;
+
+      if (item.subtitle && family !== "small") {
+        const sub = mid.addText(item.subtitle);
+        sub.font = Font.regularSystemFont(7);
+        sub.textColor = C(t.secondary);
+        sub.lineLimit = 1;
+      }
+
+      row.addSpacer();
+
+      const when = row.addText(item.time || (item.timestamp ? relativeTimeFromISO(item.timestamp) : ""));
+      when.font = Font.mediumSystemFont(7);
+      when.textColor = C(t.faint);
+
+      if (item.url) row.url = item.url;
+      w.addSpacer(6);
+    }
+  }
+
+  if (family === "large") {
+    w.addSpacer();
+
+    const lower = w.addStack();
+    lower.layoutHorizontally();
+
+    const hub = addCard(lower, t, 9);
+    hub.layoutVertically();
+    hub.url = feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub;
+    const h1 = hub.addText("DRIVE");
+    h1.font = Font.semiboldSystemFont(7);
+    h1.textColor = C(t.secondary);
+    const h2 = hub.addText("Open working hub");
+    h2.font = Font.mediumSystemFont(10);
+    h2.textColor = C(t.text);
+
+    lower.addSpacer(8);
+
+    const cp = addCard(lower, t, 9);
+    cp.layoutVertically();
+    cp.url = feed.links && feed.links.checkpoint ? feed.links.checkpoint : CASE_ACTIVITY_FALLBACK.links.checkpoint;
+    const c1 = cp.addText("CHECKPOINT");
+    c1.font = Font.semiboldSystemFont(7);
+    c1.textColor = C(t.secondary);
+    const c2 = cp.addText("Current case notes");
+    c2.font = Font.mediumSystemFont(10);
+    c2.textColor = C(t.text);
+  }
+
+  w.url = feed.links && feed.links.hub ? feed.links.hub : CASE_ACTIVITY_FALLBACK.links.hub;
+  w.refreshAfterDate = new Date(Date.now() + 10 * 60 * 1000);
+  return w;
+}
+
+async function buildWidget(data, opts) {
   if (opts.type === "clock") return buildClockWidget(data, opts);
   if (opts.type === "agenda") return buildAgendaWidget(data, opts);
   if (opts.type === "dashboard") return buildDashboardWidget(data, opts);
@@ -1688,6 +1892,7 @@ function buildWidget(data, opts) {
   if (opts.type === "countdown") return buildCountdownWidget(data, opts);
   if (opts.type === "overview") return buildOverviewWidget(data, opts);
   if (opts.type === "chatgpt") return buildChatGPTWidget(data, opts);
+  if (opts.type === "caseactivity") return await buildCaseActivityWidget(opts);
   return buildTasksWidget(data, opts);
 }
 
@@ -1702,7 +1907,7 @@ async function chooseHomeWidget(data, state) {
     "Today", "Personal / Business", "Weekly", "Progress", "Morning", "Night",
     "Follow Ups", "Calendar", "Minimal Clock", "Utility", "Control Center",
     "Launcher", "Daily Note", "Quick Add", "Completed", "Essentials",
-    "Countdown", "Overview", "ChatGPT"
+    "Countdown", "Overview", "ChatGPT", "Case Activity"
   ].forEach(name => typeAlert.addAction(name));
   typeAlert.addCancelAction("Cancel");
   const typeIndex = await typeAlert.present();
@@ -1742,7 +1947,7 @@ async function chooseHomeWidget(data, state) {
   const action = await done.present();
 
   if (action === 0) {
-    const widget = buildWidget(data, next);
+    const widget = await buildWidget(data, next);
     await widget.presentMedium();
   }
   return true;
@@ -1757,7 +1962,7 @@ async function previewWidget(data, state) {
     "Today", "Personal / Business", "Weekly", "Progress", "Morning", "Night",
     "Follow Ups", "Calendar", "Minimal Clock", "Utility", "Control Center",
     "Launcher", "Daily Note", "Quick Add", "Completed", "Essentials",
-    "Countdown", "Overview", "ChatGPT"
+    "Countdown", "Overview", "ChatGPT", "Case Activity"
   ].forEach(name => a.addAction(name));
   a.addCancelAction("Cancel");
   const typeIndex = await a.present();
@@ -1776,7 +1981,7 @@ async function previewWidget(data, state) {
     list: state.selected,
     themeName: themeKeys[themeIndex]
   };
-  const widget = buildWidget(data, opts);
+  const widget = await buildWidget(data, opts);
   await widget.presentMedium();
 }
 
@@ -1985,7 +2190,7 @@ let data = loadData();
 
 if (config.runsInWidget) {
   const opts = parseWidgetParameter(args.widgetParameter);
-  const widget = buildWidget(data, opts);
+  const widget = await buildWidget(data, opts);
   Script.setWidget(widget);
   Script.complete();
 } else {
