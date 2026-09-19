@@ -630,56 +630,82 @@ function buildClockWidget(data, opts) {
   return w;
 }
 
-function buildAgendaWidget(data, opts) {
-  const t = theme(opts.themeName);
-  const family = config.widgetFamily || "medium";
-  const w = baseWidget(t);
+const GOOGLE_CALENDAR_FEED_URL = "https://navi-os-widgets.vercel.app/api/calendar";
 
-  addHeader(w, t, "Agenda", listTitle(opts.list), scriptURL({ action: "open", list: opts.list }));
+async function loadGoogleCalendarFeed() {
+  try {
+    const req = new Request(GOOGLE_CALENDAR_FEED_URL + "?t=" + Date.now());
+    req.timeoutInterval = 8;
+    const payload = await req.loadJSON();
+    if (!payload || payload.ok !== true || !Array.isArray(payload.events)) return { ok:false, events:[] };
+    return payload;
+  } catch (_) {
+    return { ok:false, events:[] };
+  }
+}
+
+function eventTimeLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return fmtDate(d, "h:mm a");
+}
+
+async function buildAgendaWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const family = widgetFamily();
+  const w = baseWidget(t);
+  const feed = await loadGoogleCalendarFeed();
+
+  addHeader(w, t, "Agenda", "GOOGLE CALENDAR", GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
   addGradientDivider(w, t, 6);
 
-  const upcoming = openTasks(data, opts.list)
-    .filter(x => x.due)
-    .sort((a,b) => new Date(a.due) - new Date(b.due));
-
-  const source = upcoming.length ? upcoming : openTasks(data, opts.list);
-  const maxRows = family === "large" ? 6 : family === "small" ? 2 : 4;
-
-  if (!source.length) {
+  if (!feed.ok) {
     w.addSpacer();
-    const empty = w.addText("Your day is clear.");
+    const title = w.addText("Google Calendar not connected");
+    title.font = displayFont(t, family === "small" ? 13 : 15, "regular");
+    title.textColor = C(t.text);
+    const sub = w.addText("Connect the private Vercel calendar feed.");
+    sub.font = Font.mediumSystemFont(8);
+    sub.textColor = C(t.secondary);
+    w.addSpacer();
+    return w;
+  }
+
+  const events = feed.events || [];
+  const maxRows = familyRows(2, 4, 6);
+
+  if (!events.length) {
+    w.addSpacer();
+    const empty = w.addText("Your Google Calendar is clear.");
     empty.font = displayFont(t, 14, "regular");
     empty.textColor = C(t.secondary);
     w.addSpacer();
   } else {
-    for (const task of source.slice(0, maxRows)) {
-      const row = w.addStack();
+    for (const event of events.slice(0,maxRows)) {
+      const row=w.addStack();
       row.layoutHorizontally();
       row.centerAlignContent();
-      row.url = scriptURL({ action: "toggle", id: task.id, list: opts.list });
+      if (event.url) row.url=event.url;
 
-      const time = row.addText(task.due ? fmtDate(new Date(task.due), "h:mm a") : "OPEN");
-      time.font = Font.semiboldSystemFont(8);
-      time.textColor = C(t.accent);
-      time.lineLimit = 1;
+      const time=row.addText(eventTimeLabel(event.start));
+      time.font=Font.semiboldSystemFont(8);
+      time.textColor=C(t.accent);
       row.addSpacer(10);
 
-      const title = row.addText(task.title);
-      title.font = Font.mediumSystemFont(12);
-      title.textColor = C(t.text);
-      title.lineLimit = 1;
-      title.minimumScaleFactor = 0.7;
-
+      const title=row.addText(event.title || "Untitled");
+      title.font=Font.mediumSystemFont(12);
+      title.textColor=C(t.text);
+      title.lineLimit=1;
+      title.minimumScaleFactor=0.7;
       row.addSpacer();
       w.addSpacer(7);
     }
   }
 
-  w.url = scriptURL({ action: "open", list: opts.list });
-  w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
+  w.refreshAfterDate = new Date(Date.now() + 15*60*1000);
   return w;
 }
-
 function buildDashboardWidget(data, opts) {
 
   if (widgetFamily() === "small") {
@@ -1248,36 +1274,54 @@ function buildFollowupWidget(data, opts) {
   return w;
 }
 
-function buildCalendarWidget(data, opts) {
-  const t = theme(opts.themeName);
-  const w = baseWidget(t);
-  addHeader(w, t, fmtDate(new Date(), "MMMM"), fmtDate(new Date(), "yyyy"), scriptURL({ action: "open", list: opts.list }));
+async function buildCalendarWidget(data, opts) {
+  const t=theme(opts.themeName);
+  const w=baseWidget(t);
+  const feed=await loadGoogleCalendarFeed();
+
+  addHeader(w,t,fmtDate(new Date(),"MMMM"),"GOOGLE CALENDAR",GOOGLE_CALENDAR_FEED_URL.replace("/api/calendar",""));
   w.addSpacer(9);
 
-  const strip = w.addStack();
+  const strip=w.addStack();
   strip.layoutHorizontally();
-  for (let i = 0; i < 7; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const cell = strip.addStack();
-    cell.layoutVertically();
-    cell.centerAlignContent();
-    const a = cell.addText(fmtDate(d, "E").slice(0,1));
-    a.font = Font.mediumSystemFont(7);
-    a.textColor = C(t.secondary);
-    const b = cell.addText(fmtDate(d, "d"));
-    b.font = displayFont(t, 14, "regular");
-    b.textColor = i === 0 ? C(t.accent) : C(t.text);
-    if (i < 6) strip.addSpacer();
+  for(let i=0;i<7;i++){
+    const d=new Date(); d.setDate(d.getDate()+i);
+    const cell=strip.addStack();
+    cell.layoutVertically(); cell.centerAlignContent();
+    const a=cell.addText(fmtDate(d,"E").slice(0,1));
+    a.font=Font.mediumSystemFont(7); a.textColor=C(t.secondary);
+    const b=cell.addText(fmtDate(d,"d"));
+    b.font=displayFont(t,14,"regular"); b.textColor=i===0?C(t.accent):C(t.text);
+    if(i<6)strip.addSpacer();
   }
 
   w.addSpacer(12);
-  const due = openTasks(data, opts.list).filter(x => x.due);
-  addSimpleTaskRows(w, t, due.length ? due : openTasks(data, opts.list), opts.list, familyRows(1, 3, 5));
-  w.url = scriptURL({ action: "open", list: opts.list });
+
+  if(!feed.ok){
+    const x=w.addText("Google Calendar not connected");
+    x.font=Font.mediumSystemFont(10); x.textColor=C(t.secondary);
+    return w;
+  }
+
+  const events=(feed.events||[]).slice(0,familyRows(1,3,5));
+  if(!events.length){
+    const x=w.addText("No upcoming Google Calendar events.");
+    x.font=Font.mediumSystemFont(10); x.textColor=C(t.secondary);
+  }else{
+    for(const event of events){
+      const row=w.addStack(); row.layoutHorizontally(); row.centerAlignContent();
+      if(event.url)row.url=event.url;
+      const time=row.addText(eventTimeLabel(event.start));
+      time.font=Font.semiboldSystemFont(8); time.textColor=C(t.accent);
+      row.addSpacer(8);
+      const title=row.addText(event.title||"Untitled");
+      title.font=Font.mediumSystemFont(10); title.textColor=C(t.text); title.lineLimit=1;
+      row.addSpacer(); w.addSpacer(6);
+    }
+  }
+  w.refreshAfterDate=new Date(Date.now()+15*60*1000);
   return w;
 }
-
 function buildMinimalClockWidget(data, opts) {
   const t = theme(opts.themeName);
   const w = baseWidget(t);
@@ -2083,7 +2127,7 @@ async function buildAccessoryWidget(data, opts) {
 async function buildWidget(data, opts) {
   if (String(widgetFamily()).startsWith("accessory")) return await buildAccessoryWidget(data, opts);
   if (opts.type === "clock") return buildClockWidget(data, opts);
-  if (opts.type === "agenda") return buildAgendaWidget(data, opts);
+  if (opts.type === "agenda") return await buildAgendaWidget(data, opts);
   if (opts.type === "dashboard") return buildDashboardWidget(data, opts);
   if (opts.type === "focus") return buildFocusWidget(data, opts);
   if (opts.type === "status") return buildStatusWidget(data, opts);
@@ -2095,7 +2139,7 @@ async function buildWidget(data, opts) {
   if (opts.type === "morning") return buildMorningWidget(data, opts);
   if (opts.type === "night") return buildNightWidget(data, opts);
   if (opts.type === "followup") return buildFollowupWidget(data, opts);
-  if (opts.type === "calendar") return buildCalendarWidget(data, opts);
+  if (opts.type === "calendar") return await buildCalendarWidget(data, opts);
   if (opts.type === "minimalclock") return buildMinimalClockWidget(data, opts);
   if (opts.type === "utility") return buildUtilityWidget(data, opts);
   if (opts.type === "controlcenter") return buildControlCenterWidget(data, opts);
