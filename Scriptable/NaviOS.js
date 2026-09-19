@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -57,7 +57,7 @@ const THEMES = {
   }
 };
 
-const TYPES = ["tasks", "clock", "agenda", "dashboard"];
+const TYPES = ["tasks", "clock", "agenda", "dashboard", "focus", "status", "compact"];
 
 function C(hex, alpha) {
   return new Color(hex, alpha == null ? 1 : alpha);
@@ -634,10 +634,163 @@ function buildDashboardWidget(data, opts) {
   return w;
 }
 
+function buildFocusWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const active = openTasks(data, opts.list);
+  const next = active[0];
+
+  addHeader(w, t, "Focus", listTitle(opts.list), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(10);
+
+  const card = addCard(w, t, 12);
+  card.layoutVertically();
+
+  const label = card.addText(next ? "NEXT" : "CLEAR");
+  label.font = Font.semiboldSystemFont(8);
+  label.textColor = C(t.secondary);
+
+  card.addSpacer(5);
+
+  const title = card.addText(next ? next.title : "Nothing pressing.");
+  title.font = displayFont(t, 21, "regular");
+  title.textColor = C(t.text);
+  title.lineLimit = 2;
+  title.minimumScaleFactor = 0.72;
+
+  if (next && next.due) {
+    card.addSpacer(5);
+    const due = card.addText(fmtDue(next.due) || "");
+    due.font = Font.regularSystemFont(8);
+    due.textColor = C(t.secondary);
+  }
+
+  w.addSpacer();
+
+  const footer = w.addStack();
+  footer.layoutHorizontally();
+  const open = footer.addText(active.length + " OPEN");
+  open.font = Font.mediumSystemFont(8);
+  open.textColor = C(t.faint);
+  footer.addSpacer();
+  const done = footer.addText(completedToday(data, opts.list) + " DONE TODAY");
+  done.font = Font.mediumSystemFont(8);
+  done.textColor = C(t.faint);
+
+  if (next) w.url = scriptURL({ action: "toggle", id: next.id, list: opts.list });
+  else w.url = scriptURL({ action: "add", list: opts.list });
+
+  w.refreshAfterDate = new Date(Date.now() + 10 * 60 * 1000);
+  return w;
+}
+
+function buildStatusWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+
+  addHeader(w, t, "Status", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  w.addSpacer(10);
+
+  const row = w.addStack();
+  row.layoutHorizontally();
+
+  const battery = addCard(row, t, 10);
+  addMetric(battery, t, Math.round(Device.batteryLevel() * 100) + "%", "Battery", true);
+
+  row.addSpacer(8);
+
+  const tasks = addCard(row, t, 10);
+  addMetric(tasks, t, openTasks(data, opts.list).length, listTitle(opts.list) + " open", true);
+
+  w.addSpacer(8);
+
+  const lower = w.addStack();
+  lower.layoutHorizontally();
+
+  const personal = addCard(lower, t, 9);
+  addMetric(personal, t, openTasks(data, "personal").length, "Personal", false);
+
+  lower.addSpacer(8);
+
+  const business = addCard(lower, t, 9);
+  addMetric(business, t, openTasks(data, "business").length, "Business", false);
+
+  lower.addSpacer(8);
+
+  const time = addCard(lower, t, 9);
+  addMetric(time, t, fmtTime(new Date()), "Time", false);
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
+  return w;
+}
+
+function buildCompactWidget(data, opts) {
+  const t = theme(opts.themeName);
+  const w = baseWidget(t);
+  const active = openTasks(data, opts.list);
+
+  const top = w.addStack();
+  top.layoutHorizontally();
+  top.centerAlignContent();
+
+  const date = top.addText(fmtDate(new Date(), "EEE · MMM d").toUpperCase());
+  date.font = Font.mediumSystemFont(8);
+  date.textColor = C(t.secondary);
+
+  top.addSpacer();
+
+  const count = top.addText(active.length + " OPEN");
+  count.font = Font.mediumSystemFont(8);
+  count.textColor = C(t.accent);
+
+  w.addSpacer(8);
+
+  const title = w.addText(listTitle(opts.list));
+  title.font = displayFont(t, 25, "regular");
+  title.textColor = C(t.text);
+
+  w.addSpacer(6);
+
+  const next = active.slice(0, 2);
+  for (const task of next) {
+    const row = w.addStack();
+    row.layoutHorizontally();
+    row.url = scriptURL({ action: "toggle", id: task.id, list: opts.list });
+
+    const bullet = row.addText("○");
+    bullet.font = Font.regularSystemFont(13);
+    bullet.textColor = C(t.accent);
+
+    row.addSpacer(7);
+
+    const tx = row.addText(task.title);
+    tx.font = Font.mediumSystemFont(11);
+    tx.textColor = C(t.text);
+    tx.lineLimit = 1;
+
+    row.addSpacer();
+    w.addSpacer(5);
+  }
+
+  if (!next.length) {
+    const clear = w.addText("Nothing pressing.");
+    clear.font = Font.regularSystemFont(11);
+    clear.textColor = C(t.secondary);
+  }
+
+  w.url = scriptURL({ action: "open", list: opts.list });
+  w.refreshAfterDate = new Date(Date.now() + 10 * 60 * 1000);
+  return w;
+}
+
 function buildWidget(data, opts) {
   if (opts.type === "clock") return buildClockWidget(data, opts);
   if (opts.type === "agenda") return buildAgendaWidget(data, opts);
   if (opts.type === "dashboard") return buildDashboardWidget(data, opts);
+  if (opts.type === "focus") return buildFocusWidget(data, opts);
+  if (opts.type === "status") return buildStatusWidget(data, opts);
+  if (opts.type === "compact") return buildCompactWidget(data, opts);
   return buildTasksWidget(data, opts);
 }
 
@@ -651,6 +804,9 @@ async function chooseHomeWidget(data, state) {
   typeAlert.addAction("Clock");
   typeAlert.addAction("Agenda");
   typeAlert.addAction("Dashboard");
+  typeAlert.addAction("Focus");
+  typeAlert.addAction("Status");
+  typeAlert.addAction("Compact");
   typeAlert.addCancelAction("Cancel");
   const typeIndex = await typeAlert.present();
   if (typeIndex < 0) return false;
@@ -703,6 +859,9 @@ async function previewWidget(data, state) {
   a.addAction("Clock");
   a.addAction("Agenda");
   a.addAction("Dashboard");
+  a.addAction("Focus");
+  a.addAction("Status");
+  a.addAction("Compact");
   a.addCancelAction("Cancel");
   const typeIndex = await a.present();
   if (typeIndex < 0) return;
