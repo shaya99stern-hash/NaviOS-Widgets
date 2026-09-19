@@ -2,7 +2,7 @@
 // Real iOS Home Screen widgets hosted by Scriptable.
 // No server, no Vercel, no developer account, local-first task storage.
 
-const VERSION = "3.1.0";
+const VERSION = "3.1.1";
 const fm = FileManager.local();
 const root = fm.joinPath(fm.documentsDirectory(), "NaviOS");
 const dataPath = fm.joinPath(root, "tasks.json");
@@ -274,7 +274,7 @@ async function scheduleTaskNotification(task) {
   if (Number.isNaN(when.getTime()) || when <= new Date()) return;
   const n = new Notification();
   n.identifier = "navios-" + task.id;
-  n.title = "NaviOS · " + listTitle(task.list);
+  n.title = listTitle(task.list);
   n.body = task.title;
   n.sound = "default";
   n.openURL = scriptURL({ action: "open", list: task.list });
@@ -600,7 +600,7 @@ function buildDashboardWidget(data, opts) {
   if (widgetFamily() === "small") {
     const t = theme(opts.themeName);
     const w = baseWidget(t);
-    const label = w.addText("NaviOS");
+    const label = w.addText("Today");
     label.font = displayFont(t, 18, "regular");
     label.textColor = C(t.text);
     w.addSpacer(8);
@@ -619,7 +619,7 @@ function buildDashboardWidget(data, opts) {
   const family = config.widgetFamily || "medium";
   const w = baseWidget(t);
 
-  addHeader(w, t, "NaviOS", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
+  addHeader(w, t, "Overview", fmtDate(new Date()), scriptURL({ action: "open", list: opts.list }));
   w.addSpacer(8);
 
   const top = w.addStack();
@@ -933,7 +933,7 @@ function buildSplitWidget(data, opts) {
     b.font = displayFont(t, 17, "regular");
     b.textColor = C(t.text);
     w.addSpacer();
-    const meta = w.addText("NAVI OS");
+    const meta = w.addText("OVERVIEW");
     meta.font = Font.mediumSystemFont(7);
     meta.textColor = C(t.secondary);
     return w;
@@ -1279,7 +1279,7 @@ function buildControlCenterWidget(data, opts) {
 
   const t = theme(opts.themeName);
   const w = baseWidget(t);
-  addHeader(w, t, "Control Center", "NAVI OS", scriptURL({ action: "open", list: opts.list }));
+  addHeader(w, t, "Control Center", "STATUS", scriptURL({ action: "open", list: opts.list }));
   w.addSpacer(8);
 
   const grid1 = w.addStack(); grid1.layoutHorizontally();
@@ -1314,7 +1314,7 @@ function buildLauncherWidget(data, opts) {
     title.font = displayFont(t, 17, "regular");
     title.textColor = C(t.text);
     w.addSpacer();
-    const meta = w.addText("Tap to open NaviOS");
+    const meta = w.addText("Tap to open");
     meta.font = Font.mediumSystemFont(7);
     meta.textColor = C(t.secondary);
     w.url = scriptURL({ action: "open", list: opts.list });
@@ -1323,7 +1323,7 @@ function buildLauncherWidget(data, opts) {
 
   const t = theme(opts.themeName);
   const w = baseWidget(t);
-  addHeader(w, t, "Launcher", "NAVI OS", scriptURL({ action: "open", list: opts.list }));
+  addHeader(w, t, "Launcher", "QUICK ACTIONS", scriptURL({ action: "open", list: opts.list }));
   w.addSpacer(9);
 
   const actions = [
