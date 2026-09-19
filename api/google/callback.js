@@ -7,7 +7,7 @@ export default async function handler(req,res){
   const redirect=base+"/api/google/callback";
   const body=new URLSearchParams({
     code:String(code),
-    client_id:process.env.GOOGLE_CLIENT_ID||"832962466747-p6fsln32h3lsu7ag0icblklikebkrv0e0.apps.googleusercontent.com",
+    client_id:process.env.GOOGLE_CLIENT_ID||"",
     client_secret:process.env.GOOGLE_CLIENT_SECRET||"",
     redirect_uri:redirect,
     grant_type:"authorization_code"
