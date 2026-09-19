@@ -1,7 +1,7 @@
 import './styles.css';
 
 type Screen='home'|'widgets'|'sets'|'lock';
-type WidgetType='tasks'|'clock'|'agenda'|'dashboard'|'focus'|'status'|'compact'|'today'|'split'|'weekly'|'progress'|'morning'|'night'|'followup'|'calendar'|'minimalclock'|'utility'|'controlcenter'|'launcher'|'note'|'quickadd'|'completed'|'essentials'|'countdown'|'overview'|'chatgpt'|'caseactivity'|'nextevent'|'daytimeline'|'weekcalendar'|'upnext'|'briefing'|'priority'|'workday'|'personalday'|'casepulse'|'syncstatus'|'batteryfocus'|'quickcapture';
+type WidgetType='tasks'|'clock'|'agenda'|'dashboard'|'focus'|'status'|'compact'|'today'|'split'|'weekly'|'progress'|'morning'|'night'|'followup'|'calendar'|'minimalclock'|'utility'|'controlcenter'|'launcher'|'note'|'quickadd'|'completed'|'essentials'|'countdown'|'overview'|'chatgpt'|'caseactivity'|'nextevent'|'daytimeline'|'weekcalendar'|'upnext'|'briefing'|'priority'|'workday'|'personalday'|'casepulse'|'syncstatus'|'batteryfocus'|'quickcapture'|'inbox'|'latestemail'|'driveactivity'|'recentfiles'|'googlebrief';
 type ListType='personal'|'business';
 type ThemeType='graphite'|'editorial'|'noir'|'glass'|'stone'|'luxe'|'edgeglow'|'matrix'|'softglass'|'copper';
 type Family='all'|'minimal'|'dashboard'|'editorial'|'luxe'|'utility';
@@ -76,7 +76,12 @@ const widgetTypes:Array<[WidgetType,string,string,string]> = [
   ['casepulse','Case Pulse','Compact recent activity pulse','◉'],
   ['syncstatus','Sync Status','Latest case-feed refresh status','↻'],
   ['batteryfocus','Battery Focus','Large battery and charging status','⚡'],
-  ['quickcapture','Quick Capture','Fast local task capture','＋']
+  ['quickcapture','Quick Capture','Fast local task capture','＋'],
+  ['inbox','Inbox','Live Gmail inbox summary','✉'],
+  ['latestemail','Latest Email','Most recent Gmail message','↙'],
+  ['driveactivity','Drive Activity','Recently modified Google Drive files','▣'],
+  ['recentfiles','Recent Files','Recent Google Drive file count and list','□'],
+  ['googlebrief','Google Brief','Gmail, Drive and Calendar together','G']
 ];
 
 const sets:SetPreset[] = [
@@ -275,6 +280,11 @@ const widgetWorks:Record<WidgetType,{source:string;action:string;home:string;loc
   syncstatus:{source:'Case activity feed refresh timestamp',action:'Open connected Drive hub',home:'Small · Medium · Large',lock:'Last refresh'},
   batteryfocus:{source:'iPhone battery + charging state',action:'Open configured list',home:'Small · Medium · Large',lock:'Battery %'},
   quickcapture:{source:'Local Scriptable task store',action:'Start add-task input',home:'Small · Medium · Large',lock:'Tap to add',note:'Text entry may open Scriptable'},
+  inbox:{source:'Live Gmail via private Google OAuth backend',action:'Open Gmail',home:'Small · Medium · Large',lock:'Inbox summary'},
+  latestemail:{source:'Latest Gmail message via private Google OAuth backend',action:'Open Gmail',home:'Small · Medium · Large',lock:'Latest sender/subject'},
+  driveactivity:{source:'Live Google Drive via private Google OAuth backend',action:'Open updated Drive file',home:'Small · Medium · Large',lock:'Recent Drive update'},
+  recentfiles:{source:'Live Google Drive via private Google OAuth backend',action:'Open Drive/file',home:'Small · Medium · Large',lock:'Recent file count'},
+  googlebrief:{source:'Live Gmail + Drive + Google Calendar',action:'Open source item',home:'Small · Medium · Large',lock:'Combined Google summary'},
 };
 
 function capabilityPanel(type:WidgetType){
@@ -360,20 +370,20 @@ function homeScreen(){
   const p=activeSet();
   return topBar('Home','Your current NaviOS setup')+
     '<section class="current-card"><div class="current-copy"><div class="eyebrow">CURRENT SET</div><h2>'+p.name+'</h2><p>'+p.description+'</p><div class="chips"><span>'+p.familyLabel+'</span><span>'+p.layout.join(' · ')+'</span></div></div><div class="mini-phone-wrap">'+phonePreview(p,'home')+'</div></section>'+
-    '<section class="quick-grid"><button data-go="widgets"><span>◫</span><b>Widget Library</b><small>39 live types · 390 style combinations</small></button><button data-go="sets"><span>▦</span><b>12 Home Sets</b><small>Reference-driven full setups</small></button><button data-go="lock"><span>◉</span><b>Lock Screen</b><small>12 matching lock styles</small></button><button id="apply-current"><span>↗</span><b>Apply current widget</b><small>Send to Scriptable</small></button></section>'+
+    '<section class="google-connect-card"><div><span>GOOGLE</span><b>Gmail · Drive · Calendar</b><small>Connect once. Stay signed in through the private Vercel backend.</small></div><a href="https://navi-os-widgets.vercel.app/api/google/status">Connect Google</a></section>'+'<section class="quick-grid"><button data-go="widgets"><span>◫</span><b>Widget Library</b><small>44 live types · 440 style combinations</small></button><button data-go="sets"><span>▦</span><b>12 Home Sets</b><small>Reference-driven full setups</small></button><button data-go="lock"><span>◉</span><b>Lock Screen</b><small>12 matching lock styles</small></button><button id="apply-current"><span>↗</span><b>Apply current widget</b><small>Send to Scriptable</small></button></section>'+
     '<section class="collection-strip">'+sets.slice(0,6).map(item=>'<button data-set="'+item.id+'" data-go="sets"><div class="collection-thumb set-'+item.id+'"></div><b>'+item.name+'</b><span>'+item.familyLabel+'</span></button>').join('')+'</section>'+
     '<section class="status-note"><b>Reference-led system</b><p>The new library expands the exact dark, monochrome, editorial, modular, and luxury directions from the screens you sent while keeping Scriptable as the live widget renderer.</p></section>';
 }
 
 function widgetsScreen(){
-  return topBar('Widgets','12 independent slots · 39 live types · 10 styles')+
+  return topBar('Widgets','12 independent slots · 44 live types · 10 styles')+
     '<section><div class="section-head"><span>MULTI-SLOT</span><b>Each Home / Lock widget can keep its own setup</b></div>'+slotStrip()+'</section>'+
     '<section><div class="section-head"><span>TYPE</span><b>What should Slot '+state.slot+' show?</b></div><div class="widget-library">'+widgetTypes.map(([id,name,desc,icon])=>'<button class="widget-choice '+(state.type===id?'active':'')+'" data-type="'+id+'"><span class="widget-icon">'+icon+'</span><div><b>'+name+'</b><small>'+desc+'</small></div></button>').join('')+'</div></section>'+
     '<section><div class="section-head"><span>LIST</span><b>Which side of your life?</b></div><div class="segmented"><button class="'+(state.list==='personal'?'active':'')+'" data-list="personal">Personal</button><button class="'+(state.list==='business'?'active':'')+'" data-list="business">Business</button></div></section>'+
     '<section><div class="section-head"><span>STYLE</span><b>Dark reference families</b></div><div class="theme-list">'+themes.map(([id,name,bg,card])=>'<button class="theme-row '+(state.theme===id?'active':'')+'" data-theme="'+id+'"><span class="swatch" style="--a:'+bg+';--b:'+card+'"></span><b>'+name+'</b><span>›</span></button>').join('')+'</div></section>'+
     '<section><div class="section-head"><span>PREVIEW</span><b>Live widget preview</b></div>'+widgetPreview(state.type,state.theme,state.list)+'</section>'+capabilityPanel(state.type)+
     '<button class="primary-action" id="apply-widget">Apply to Scriptable</button>'+
-    '<a class="engine-link" href="/NaviOS-v4.1.0.scriptable" download="NaviOS-v4.1.0.scriptable">Install / Update Widget Engine v4.1.0</a>';
+    '<a class="engine-link" href="/NaviOS-v4.3.0.scriptable" download="NaviOS-v4.3.0.scriptable">Install / Update Widget Engine v4.3.0</a>';
 }
 
 
