@@ -1,7 +1,8 @@
-import CoreLocation
+@preconcurrency import CoreLocation
 import Foundation
 import Combine
 
+@MainActor
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
 
@@ -31,10 +32,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
-
-        DispatchQueue.main.async { [weak self] in
-            self?.authorization = status
-        }
+        authorization = status
 
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             manager.requestLocation()
@@ -46,10 +44,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
 
         let latitude = location.coordinate.latitude
         let longitude = location.coordinate.longitude
-
-        DispatchQueue.main.async { [weak self] in
-            self?.coordinate = (latitude, longitude)
-        }
+        coordinate = (latitude, longitude)
 
         TaskRepository.updateLastLocation(
             latitude: latitude,
