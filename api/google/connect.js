@@ -1,5 +1,5 @@
 export default async function handler(req,res){
-  const clientId=process.env.GOOGLE_CLIENT_ID;
+  const clientId=process.env.GOOGLE_CLIENT_ID||"832962466747-p6fsln32h3lsu7ag0icblklikebkrv0e0.apps.googleusercontent.com";
   if(!clientId) return res.status(503).json({ok:false,error:"google_client_not_configured"});
   const base=process.env.PUBLIC_BASE_URL||("https://"+req.headers.host);
   const redirect=base+"/api/google/callback";
